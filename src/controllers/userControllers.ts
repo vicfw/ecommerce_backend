@@ -94,7 +94,8 @@ export const loginUser = async (c: Context) => {
 
 export const getUser = async (c: Context) => {
   const id = parseInt(c.req.param('id'))
-  const user = await prisma.user.findUnique({ where: { id }, include: { address: true } })
+  const user = await prisma.user.findUnique({ where: { id }, include: { Address: true } })
+  console.log(user, "user");
 
   if (!user) {
     c.status(400)
@@ -108,8 +109,30 @@ export const getUser = async (c: Context) => {
       name: user.name,
       email: user.email,
       isAdmin: user.isAdmin,
-      address: user.address
+      address: user.Address
     },
     message: 'User found successfully',
   })
+}
+
+export const updateUser = async (c: Context) => {
+  const { name, email, } = await c.req.json()
+  const user = c.get('user')
+
+  const updatedUser = await prisma.user.update({
+    where: {
+      id: user.id
+    },
+    data: {
+      name,
+      email,
+    }
+  })
+
+  return c.json({
+    success: true,
+    data: updatedUser,
+    message: 'User updated successfully',
+  })
+
 }

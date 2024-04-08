@@ -8,9 +8,13 @@ const addresses = new Hono()
 
 addresses.post("/", protect, zValidator(
     'json',
-    validation.addressschema
+    validation.addressSchema
 ), (c) => address.createAddress(c))
 
+addresses.patch("/", protect, zValidator(
+    'json',
+    validation.addressSchema.partial()
+), (c) => address.updateAddress(c))
 
 
 

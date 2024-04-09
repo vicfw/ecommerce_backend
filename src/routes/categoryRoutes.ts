@@ -9,6 +9,8 @@ categories.get('/', (c) => category.getCategories(c))
 
 categories.post('/', (c) => category.createCategory(c))
 
+categories.delete("/:id", (c) => category.deleteCategory(c))
+
 
 
 export default categories

@@ -58,3 +58,19 @@ export const createCategory = async (c: Context) => {
     })
 
 }
+
+export const deleteCategory = async (c: Context) => {
+    const { id } = c.req.param()
+
+    await prisma.category.delete({
+        where: {
+            id: +id
+        }
+    })
+
+
+    return c.json({
+        success: true,
+        message: "Category deleted successfully"
+    })
+}

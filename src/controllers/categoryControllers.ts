@@ -74,3 +74,23 @@ export const deleteCategory = async (c: Context) => {
         message: "Category deleted successfully"
     })
 }
+
+export const updateCategory = async (c: Context) => {
+    const { id } = c.req.param()
+    const { name } = await c.req.json()
+
+    const updatedCategory = await prisma.category.update({
+        where: {
+            id: +id
+        },
+        data: {
+            name: name
+        }
+    })
+
+    return c.json({
+        success: true,
+        data: updatedCategory,
+        message: "Category updated successfully"
+    })
+}

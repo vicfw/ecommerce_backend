@@ -13,7 +13,7 @@ addresses.post("/", protect, zValidator(
 
 addresses.patch("/", protect, zValidator(
     'json',
-    validation.addressSchema.partial()
+    validation.addressSchemaPartial
 ), (c) => address.updateAddress(c))
 
 

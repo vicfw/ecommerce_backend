@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import app from '../..'
+import app from '../../server'
 
 const apiUrl = 'http://localhost:9000/api/v1/users/login'
 const bodyForSuccess = '{"email":"farid@farid.com","password":"123456"}'

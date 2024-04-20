@@ -21,17 +21,16 @@ export const createAddress = async (c: Context) => {
     })
 }
 export const updateAddress = async (c: Context) => {
+    const { id } = c.req.param()
     const body = await c.req.json()
-    const user = c.get("user")
 
     const updatedAddress = await prisma.address.update({
         where: {
-            id: user.id
+            id: +id
         },
         data: {
             ...body
         }
-
     })
 
     return c.json({

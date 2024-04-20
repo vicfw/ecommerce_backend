@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { prettyJSON } from 'hono/pretty-json'
 import { errorHandler, notFound } from './middlewares'
-import { UserRoutes, addressRoutes, categoryRoutes, productRoutes, uploadRoutes } from './routes'
+import { UserRoutes, addressRoutes, badgesRoutes, categoryRoutes, colorRoutes, productRoutes, uploadRoutes } from './routes'
 import { v2 as cloudinary } from 'cloudinary';
 
 const app = new Hono().basePath('/api/v1')
@@ -27,6 +27,8 @@ app.route("/address", addressRoutes)
 app.route("/category", categoryRoutes)
 app.route("/product", productRoutes)
 app.route("/upload", uploadRoutes)
+app.route("/color", colorRoutes)
+app.route("/badge", badgesRoutes)
 
 cloudinary.config({
   cloud_name: 'dfflta8zl',

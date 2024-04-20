@@ -20,6 +20,19 @@ export const categorySchema = z.object({
 export const productsSchema = z.object({
     name: z.string(),
     price: z.number(),
-    description: z.string(),
     categoryId: z.number(),
 })
+
+export const colorsSchema = z.object({
+    title: z.string(),
+    hexCode: z.string()
+})
+
+export const partialColorSchema = colorsSchema.partial()
+
+export const badgesSchema = z.object({
+    title: z.string(),
+    icon: z.string()
+})
+
+export const partialBadgeSchema = colorsSchema.partial()

@@ -11,7 +11,7 @@ addresses.post("/", protect, zValidator(
     validation.addressSchema
 ), (c) => address.createAddress(c))
 
-addresses.patch("/", protect, zValidator(
+addresses.patch("/:id", protect, zValidator(
     'json',
     validation.addressSchemaPartial
 ), (c) => address.updateAddress(c))

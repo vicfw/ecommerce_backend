@@ -9,23 +9,27 @@ datasource db {
 }
 
 model User {
-  id       Int       @id @default(autoincrement())
-  email    String    @unique
-  name     String?
-  password String
-  isAdmin  Boolean   @default(false)
-  Address  Address[]
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  name      String?
+  password  String
+  isAdmin   Boolean   @default(false)
+  Address   Address[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Address {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   street    String
   city      String
   country   String
   zipCode   String
-  isDefault Boolean @default(false)
-  user      User    @relation(fields: [userId], references: [id])
+  isDefault Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id])
   userId    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Category {
@@ -35,12 +39,38 @@ model Category {
   parentId      Int?
   subcategories Category[] @relation("Subcategories")
   Product       Product[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }
 
 model Product {
-  id         Int      @id @default(autoincrement())
-  name       String
-  price      Float
-  category   Category @relation(fields: [categoryId], references: [id])
-  categoryId Int
+  id          Int      @id @default(autoincrement())
+  name        String
+  price       Float
+  description String
+  category    Category @relation(fields: [categoryId], references: [id])
+  categoryId  Int
+  images      String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  colors      Color[]  @relation("ProductToColor")
+  badges      Badge[]  @relation("ProductToBadge")
+}
+
+model Color {
+  id        Int       @id @default(autoincrement())
+  title     String    @unique
+  hexCode   String    @unique
+  products  Product[] @relation("ProductToColor")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Badge {
+  id        Int       @id @default(autoincrement())
+  title     String    @unique
+  icon      String
+  products  Product[] @relation("ProductToBadge")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }

@@ -17,6 +17,7 @@ model User {
   Address   Address[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  cart      Cart?
 }
 
 model Address {
@@ -44,17 +45,37 @@ model Category {
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
+  id          Int        @id @default(autoincrement())
   name        String
   price       Float
   description String
-  category    Category @relation(fields: [categoryId], references: [id])
+  quantity    Int
+  category    Category   @relation(fields: [categoryId], references: [id])
   categoryId  Int
   images      String[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  colors      Color[]  @relation("ProductToColor")
-  badges      Badge[]  @relation("ProductToBadge")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  colors      Color[]    @relation("ProductToColor")
+  badges      Badge[]    @relation("ProductToBadge")
+  cartItem    CartItem[]
+}
+
+model Cart {
+  id        Int        @id @default(autoincrement())
+  user      User       @relation(fields: [userId], references: [id])
+  userId    Int        @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  CartItem  CartItem[]
+}
+
+model CartItem {
+  id        Int     @id @default(autoincrement())
+  quantity  Int
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+  cartId    Int
+  cart      Cart    @relation(fields: [cartId], references: [id])
 }
 
 model Color {

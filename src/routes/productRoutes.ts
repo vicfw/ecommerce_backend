@@ -1,8 +1,8 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { validation } from "../validation";
 import { product } from "../controllers";
 import { protect } from "../middlewares";
+import { validation } from "../validation";
 
 const products = new Hono();
 
@@ -13,6 +13,7 @@ products.post(
   (c) => product.createProduct(c)
 );
 products.get("/", (c) => product.getProducts(c));
+products.get("/:id", (c) => product.getProduct(c));
 products.patch("/:id", (c) => product.updateProduct(c));
 products.delete("/:id", (c) => product.deleteProduct(c));
 

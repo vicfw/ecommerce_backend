@@ -14,12 +14,6 @@ export const categorySchema = z.object({
   parentId: z.number().optional(),
 });
 
-export const productsSchema = z.object({
-  name: z.string(),
-  price: z.number(),
-  categoryId: z.number(),
-});
-
 export const colorsSchema = z.object({
   title: z.string(),
   hexCode: z.string(),
@@ -33,3 +27,21 @@ export const badgesSchema = z.object({
 });
 
 export const partialBadgeSchema = colorsSchema.partial();
+
+export const productSchema = z.object({
+  name: z.string({ required_error: "Name is Required" }).trim(),
+  price: z.number(),
+  description: z.string(),
+  quantity: z.number(),
+  categoryId: z.number(),
+  images: z.array(z.string()),
+  colors: z.array(z.number()).optional(),
+  badges: z.array(z.number()).optional(),
+});
+
+export const partialProductSchema = productSchema.partial();
+
+export const cartSchema = z.object({
+  quantity: z.number(),
+  productId: z.number(),
+});

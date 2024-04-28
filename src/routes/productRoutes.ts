@@ -6,15 +6,17 @@ import { validation } from "../validation";
 
 const products = new Hono();
 
-products.post(
-  "/",
-  protect,
-  zValidator("json", validation.productsSchema),
-  (c) => product.createProduct(c)
+products.post("/", protect, zValidator("json", validation.productSchema), (c) =>
+  product.createProduct(c)
 );
 products.get("/", (c) => product.getProducts(c));
 products.get("/:id", (c) => product.getProduct(c));
-products.patch("/:id", (c) => product.updateProduct(c));
-products.delete("/:id", (c) => product.deleteProduct(c));
+products.patch(
+  "/:id",
+  protect,
+  zValidator("json", validation.partialProductSchema),
+  (c) => product.updateProduct(c)
+);
+products.delete("/:id", protect, (c) => product.deleteProduct(c));
 
 export default products;

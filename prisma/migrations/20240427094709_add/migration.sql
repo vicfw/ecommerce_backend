@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Cart" ALTER COLUMN "price" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "CartItem" ADD COLUMN     "productId" INTEGER NOT NULL DEFAULT 58;

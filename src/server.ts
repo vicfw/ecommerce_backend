@@ -7,6 +7,7 @@ import {
   UserRoutes,
   addressRoutes,
   badgesRoutes,
+  cartRoutes,
   categoryRoutes,
   colorRoutes,
   productRoutes,
@@ -37,6 +38,7 @@ app.route("/product", productRoutes);
 app.route("/upload", uploadRoutes);
 app.route("/color", colorRoutes);
 app.route("/badge", badgesRoutes);
+app.route("/cart", cartRoutes);
 
 cloudinary.config({
   cloud_name: Bun.env.CLOUDINARY_CLOUD_NAME,

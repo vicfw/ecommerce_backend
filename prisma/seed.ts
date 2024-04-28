@@ -7,6 +7,7 @@ const main = async () => {
   let createdUser;
   let createdCategory;
   let createdColor: number[] = [];
+  let createdBadge: number[] = [];
   for (const element of user) {
     createdUser = await prisma.user.create({ data: element });
   }
@@ -23,7 +24,8 @@ const main = async () => {
     createdColor.push(color.id);
   }
   for (const element of badge) {
-    await prisma.badge.create({ data: element });
+    const badge = await prisma.badge.create({ data: element });
+    createdBadge.push(badge.id);
   }
   for (const element of product) {
     await prisma.product.create({
@@ -33,6 +35,11 @@ const main = async () => {
         colors: {
           connect: createdColor?.map((colorId) => ({
             id: Number(colorId),
+          })),
+        },
+        badges: {
+          connect: createdBadge?.map((badgeId) => ({
+            id: Number(badgeId),
           })),
         },
       },

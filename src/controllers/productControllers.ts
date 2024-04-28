@@ -40,8 +40,22 @@ export const getProduct = async (c: Context) => {
 };
 
 export const createProduct = async (c: Context) => {
-  const { name, price, categoryId, images, colors, description, quantity } =
-    await c.req.json();
+  const {
+    name,
+    price,
+    categoryId,
+    images,
+    colors,
+    description,
+    quantity,
+    badges,
+  } = await c.req.json();
+
+  const include = {
+    category: true,
+    colors: colors && colors.length > 0,
+    badges: badges && badges.length > 0,
+  };
 
   const product = await prisma.product.create({
     data: {
@@ -52,14 +66,13 @@ export const createProduct = async (c: Context) => {
       quantity,
       images,
       colors: {
-        connect: colors.map((colorId: number) => ({ id: Number(colorId) })),
+        connect: colors?.map((colorId: number) => ({ id: Number(colorId) })),
+      },
+      badges: {
+        connect: badges?.map((badgeId: number) => ({ id: Number(badgeId) })),
       },
     },
-    include: {
-      category: true,
-      colors: true,
-      badges: true,
-    },
+    include,
   });
 
   return c.json({

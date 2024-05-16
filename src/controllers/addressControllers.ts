@@ -1,42 +1,59 @@
 import { Context } from "hono";
 import { prisma } from "../config/prismaClient";
 
+export const getAddress = async (c: Context) => {
+  const user = c.get("user");
+
+  const address = await prisma.address.findMany({
+    where: { userId: user.id },
+  });
+
+  return c.json({
+    success: true,
+    data: address,
+    message: "Address retrieved successfully",
+  });
+};
+
 export const createAddress = async (c: Context) => {
-    const body = await c.req.json()
-    const user = c.get("user")
+  const body = await c.req.json();
+  const user = c.get("user");
 
-    const addresses = await prisma.address.findMany({ where: { userId: user.id, isDefault: true } })
+  const addresses = await prisma.address.findMany({
+    where: { userId: user.id, isDefault: true },
+  });
 
-    if (!addresses.length && !body.isDefault) {
-        c.status(400)
-        throw new Error("Please add a default address")
-    }
+  if (!addresses.length && !body.isDefault) {
+    c.status(400);
+    throw new Error("Please add a default address");
+  }
 
-    const address = await prisma.address.create({ data: { userId: user.id, ...body } })
+  const address = await prisma.address.create({
+    data: { userId: user.id, ...body },
+  });
 
-    return c.json({
-        success: true,
-        data: address,
-        message: "Address created successfully"
-    })
-}
+  return c.json({
+    success: true,
+    data: address,
+    message: "Address created successfully",
+  });
+};
 export const updateAddress = async (c: Context) => {
-    const { id } = c.req.param()
-    const body = await c.req.json()
+  const { id } = c.req.param();
+  const body = await c.req.json();
 
-    const updatedAddress = await prisma.address.update({
-        where: {
-            id: +id
-        },
-        data: {
-            ...body
-        }
-    })
+  const updatedAddress = await prisma.address.update({
+    where: {
+      id: +id,
+    },
+    data: {
+      ...body,
+    },
+  });
 
-    return c.json({
-        success: true,
-        data: updatedAddress,
-        message: "Address updated successfully"
-    })
-
-}
+  return c.json({
+    success: true,
+    data: updatedAddress,
+    message: "Address updated successfully",
+  });
+};

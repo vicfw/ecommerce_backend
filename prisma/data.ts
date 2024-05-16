@@ -1,9 +1,7 @@
 export const user = [
   {
-    email: "farid@farid4.com",
-    password: "123456",
+    phoneNumber: 9362712519,
     isAdmin: true,
-    name: "farid",
   },
 ];
 

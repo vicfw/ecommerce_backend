@@ -10,6 +10,7 @@ import {
   cartRoutes,
   categoryRoutes,
   colorRoutes,
+  orderRoutes,
   productRoutes,
   uploadRoutes,
 } from "./routes";
@@ -35,6 +36,7 @@ app.route("/users", UserRoutes);
 app.route("/address", addressRoutes);
 app.route("/category", categoryRoutes);
 app.route("/product", productRoutes);
+app.route("/order", orderRoutes);
 app.route("/upload", uploadRoutes);
 app.route("/color", colorRoutes);
 app.route("/badge", badgesRoutes);

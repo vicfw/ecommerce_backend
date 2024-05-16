@@ -6,3 +6,4 @@ export { default as uploadRoutes } from "./uploadRoutes";
 export { default as colorRoutes } from "./colorRoutes";
 export { default as badgesRoutes } from "./badgeRoutes";
 export { default as cartRoutes } from "./cartRoutes";
+export { default as orderRoutes } from "./orderRoutes";

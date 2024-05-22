@@ -12,13 +12,13 @@ users.post("/", (c) => user.createUser(c));
 
 // Register or Login with Mobile
 
-// // Login User
-// users.post("/login", (c) => user.loginUser(c));
+// Login User
+users.post("/login", (c) => user.loginUser(c));
 
-// // Get Single User
+// Get Single User
 // users.get("/:id", isAdmin, (c) => user.getUser(c));
 
-// // Get User Profile
+// Get User Profile
 // users.patch("/me", protect, (c) => user.updateUser(c));
 
 export default users;

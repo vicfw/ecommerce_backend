@@ -3,6 +3,7 @@ import { prisma } from "../config/prismaClient";
 import { genToken } from "../utils";
 import { HTTPException } from "hono/http-exception";
 import { generateSMSCode } from "../utils/genSMSCode";
+import { dateAddition } from "../utils/dateAddition";
 
 export const getUsers = async (c: Context) => {
   const users = await prisma.user.findMany();
@@ -13,25 +14,42 @@ export const getUsers = async (c: Context) => {
 export const createUser = async (c: Context) => {
   const { phoneNumber } = await c.req.json();
 
-  // Check for existing user
-  const userExists = await prisma.user.findUnique({ where: { phoneNumber } });
-  if (userExists) {
-    throw new HTTPException(401, {
-      message: "این شماره تماس توسط فرد دیگری استفاده",
-      cause: { field: "email", translationKey: "PHONE_NUMBER_ALREADY_USED" },
-    });
-  }
-
   const code = generateSMSCode();
+
+  const dateWithExtra2Minutes = dateAddition(2);
 
   const hashedPassword = await Bun.password.hash(code.toString(), {
     algorithm: "bcrypt",
     cost: 4,
   });
 
-  const now = new Date();
-  const extraTwoMinutes = 2 * 60 * 1000;
-  const dateWithExtra2Minutes = new Date(now.getTime() + extraTwoMinutes);
+  // Check for existing user
+  const userExists = await prisma.user.findUnique({ where: { phoneNumber } });
+  if (userExists) {
+    const codeValidUntil = new Date(userExists.codeValidUntil);
+    const presentTime = new Date(Date.now());
+
+    // if (codeValidUntil > presentTime) {
+    //   throw new HTTPException(400, {
+    //     cause: { field: "phoneNumber" },
+    //     message: "کد شما به تازگی ارسال شده است",
+    //   });
+    // }
+
+    await prisma.user.update({
+      where: { phoneNumber },
+      data: {
+        code: hashedPassword,
+        codeValidUntil: dateWithExtra2Minutes,
+      },
+    });
+
+    return c.json({
+      success: true,
+      code,
+      message: "users code updated.",
+    });
+  }
 
   const user = await prisma.user.create({
     data: {
@@ -47,48 +65,66 @@ export const createUser = async (c: Context) => {
     });
   }
 
-  // const token = await genToken(user.id.toString());
-
   return c.json({
     success: true,
+    code,
     message: "User created successfully",
   });
 };
 
-// export const loginUser = async (c: Context) => {
-//   const { email, password } = await c.req.json();
+export const loginUser = async (c: Context) => {
+  const { code, phoneNumber } = await c.req.json();
 
-//   // Check for existing user
-//   if (!email || !password) {
-//     c.status(400);
-//     throw new Error("Please provide an email and password");
-//   }
+  // Check for existing user
+  if (!code || !phoneNumber) {
+    throw new HTTPException(500, {
+      message: "Please provide an code and phone number",
+    });
+  }
 
-//   const user = await prisma.user.findUnique({ where: { email } });
-//   if (!user) {
-//     c.status(401);
-//     throw new Error("No user found with this email");
-//   }
+  const user = await prisma.user.findUnique({ where: { phoneNumber } });
+  if (!user) {
+    throw new HTTPException(401, {
+      message: "No user found with this phone number",
+    });
+  }
 
-//   if (!(await Bun.password.verifySync(password, user.password, "bcrypt"))) {
-//     c.status(401);
-//     throw new Error("Invalid credentials");
-//   } else {
-//     const token = await genToken(user.id.toString());
+  const codeValidUntil = new Date(user.codeValidUntil);
+  const presentTime = new Date(Date.now());
 
-//     return c.json({
-//       success: true,
-//       data: {
-//         id: user.id,
-//         name: user.name,
-//         email: user.email,
-//         isAdmin: user.isAdmin,
-//       },
-//       token,
-//       message: "User logged in successfully",
-//     });
-//   }
-// };
+  if (isNaN(codeValidUntil.getTime())) {
+    throw new HTTPException(400, {
+      message: "Invalid date format",
+    });
+  }
+
+  if (presentTime >= codeValidUntil) {
+    throw new HTTPException(401, {
+      message: "کد تایید منقضی شد",
+      cause: { field: "code" },
+    });
+  }
+
+  if (!(await Bun.password.verifySync(code, user.code, "bcrypt"))) {
+    throw new HTTPException(401, {
+      message: "گد تایید اشتباه است",
+      cause: { field: "code" },
+    });
+  }
+
+  const token = await genToken(user.id.toString());
+
+  return c.json({
+    success: true,
+    data: {
+      id: user.id,
+      phoneNumber: user.phoneNumber,
+      token,
+    },
+
+    message: "User logged in successfully",
+  });
+};
 
 // export const getUser = async (c: Context) => {
 //   const id = parseInt(c.req.param("id"));

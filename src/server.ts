@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
-import { errorHandler, notFound } from "./middlewares";
+import { errorHandler, notFound, protect } from "./middlewares";
 import {
   UserRoutes,
   addressRoutes,
@@ -15,6 +15,7 @@ import {
   uploadRoutes,
 } from "./routes";
 import { v2 as cloudinary } from "cloudinary";
+import { limiter } from "./middlewares/rateLimitMiddleware";
 
 const app = new Hono().basePath("/api/v1");
 
@@ -30,6 +31,9 @@ app.use(
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   })
 );
+
+// Rate Limiter
+app.use("*", limiter);
 
 // User Routes
 app.route("/users", UserRoutes);

@@ -13,6 +13,8 @@ export const errorHandler = (c: Context) => {
     };
     return c.json(errorData, err.status); // Send custom JSON with status code
   } else {
+    console.log("error:", err);
+
     const errorData = {
       message: "An unexpected error occurred!",
       code: 500,

@@ -10,7 +10,7 @@ datasource db {
 
 model User {
   id             Int       @id @default(autoincrement())
-  phoneNumber    BigInt    @unique
+  phoneNumber    String    @unique
   code           String
   codeValidUntil DateTime
   isAdmin        Boolean   @default(false)

@@ -1,6 +1,6 @@
 export const user = [
   {
-    phoneNumber: 9362712519,
+    phoneNumber: "09362712519",
     isAdmin: true,
   },
 ];
@@ -43,6 +43,8 @@ export const product = [
       "https://res.cloudinary.com/dfflta8zl/image/upload/v1713014840/_idN3MtRxGHd-iyoDQoJK.png",
     ],
     quantity: 10,
+    point: 10,
+    weight: 5,
   },
   {
     name: "product_2",
@@ -52,6 +54,8 @@ export const product = [
       "https://res.cloudinary.com/dfflta8zl/image/upload/v1713014840/_idN3MtRxGHd-iyoDQoJK.png",
     ],
     quantity: 1,
+    point: 10,
+    weight: 5,
   },
   {
     name: "product_3",
@@ -61,6 +65,8 @@ export const product = [
       "https://res.cloudinary.com/dfflta8zl/image/upload/v1713014840/_idN3MtRxGHd-iyoDQoJK.png",
     ],
     quantity: 10,
+    point: 10,
+    weight: 5,
   },
   {
     name: "product_4",
@@ -70,6 +76,8 @@ export const product = [
       "https://res.cloudinary.com/dfflta8zl/image/upload/v1713014840/_idN3MtRxGHd-iyoDQoJK.png",
     ],
     quantity: 10,
+    point: 10,
+    weight: 5,
   },
   {
     name: "product_5",
@@ -79,6 +87,8 @@ export const product = [
       "https://res.cloudinary.com/dfflta8zl/image/upload/v1713014840/_idN3MtRxGHd-iyoDQoJK.png",
     ],
     quantity: 10,
+    point: 10,
+    weight: 5,
   },
   {
     name: "product_6",
@@ -88,6 +98,8 @@ export const product = [
       "https://res.cloudinary.com/dfflta8zl/image/upload/v1713014840/_idN3MtRxGHd-iyoDQoJK.png",
     ],
     quantity: 10,
+    point: 10,
+    weight: 5,
   },
   {
     name: "product_7",
@@ -97,6 +109,8 @@ export const product = [
       "https://res.cloudinary.com/dfflta8zl/image/upload/v1713014840/_idN3MtRxGHd-iyoDQoJK.png",
     ],
     quantity: 10,
+    point: 10,
+    weight: 5,
   },
   {
     name: "product_8",
@@ -106,5 +120,35 @@ export const product = [
       "https://res.cloudinary.com/dfflta8zl/image/upload/v1713014840/_idN3MtRxGHd-iyoDQoJK.png",
     ],
     quantity: 10,
+    point: 10,
+    weight: 5,
+  },
+];
+
+export const discount = [
+  {
+    percentage: 15,
+    startDate: "2024-05-18 12:20:33.409",
+    endDate: "2027-05-18 12:20:33.409",
+  },
+  {
+    percentage: 20,
+    startDate: "2024-05-18 12:20:33.409",
+    endDate: "2027-05-18 12:20:33.409",
+  },
+  {
+    percentage: 5,
+    startDate: "2024-05-18 12:20:33.409",
+    endDate: "2027-05-18 12:20:33.409",
+  },
+  {
+    percentage: 10,
+    startDate: "2024-05-18 12:20:33.409",
+    endDate: "2027-05-18 12:20:33.409",
+  },
+  {
+    percentage: 12,
+    startDate: "2024-05-18 12:20:33.409",
+    endDate: "2027-05-18 12:20:33.409",
   },
 ];

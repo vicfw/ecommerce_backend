@@ -10,7 +10,7 @@ export const getProducts = async (c: Context) => {
   const products = await prisma.product.findMany({
     skip: pagination.skip,
     take: pagination.limit,
-    include: { colors: true, category: true, badges: true },
+    include: { badges: true },
   });
 
   const allProductsCount = await prisma.product.count();
@@ -29,7 +29,7 @@ export const getProduct = async (c: Context) => {
 
   const products = await prisma.product.findFirst({
     where: { id: +id },
-    include: { colors: true, category: true, badges: true },
+    include: { badges: true },
   });
 
   return c.json({
@@ -62,12 +62,8 @@ export const createProduct = async (c: Context) => {
       name,
       description,
       price,
-      categoryId,
       quantity,
       images,
-      colors: {
-        connect: colors?.map((colorId: number) => ({ id: Number(colorId) })),
-      },
       badges: {
         connect: badges?.map((badgeId: number) => ({ id: Number(badgeId) })),
       },
@@ -92,17 +88,12 @@ export const updateProduct = async (c: Context) => {
     },
     data: {
       ...body,
-      colors: {
-        set: body.colors?.map((colorId: number) => ({ id: Number(colorId) })),
-      },
       badges: {
         set: body.badges?.map((badgeId: number) => ({ id: Number(badgeId) })),
       },
     },
     include: {
-      category: true,
       badges: true,
-      colors: true,
     },
   });
 

@@ -107,7 +107,7 @@ export const loginUser = async (c: Context) => {
 
   if (!(await Bun.password.verifySync(code, user.code, "bcrypt"))) {
     throw new HTTPException(401, {
-      message: "گد تایید اشتباه است",
+      message: "کد تایید اشتباه است",
       cause: { field: "code" },
     });
   }

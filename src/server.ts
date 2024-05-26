@@ -9,7 +9,6 @@ import {
   badgesRoutes,
   cartRoutes,
   categoryRoutes,
-  colorRoutes,
   orderRoutes,
   productRoutes,
   uploadRoutes,
@@ -20,8 +19,6 @@ import { limiter } from "./middlewares/rateLimitMiddleware";
 const app = new Hono().basePath("/api/v1");
 
 app.use("*", logger(), prettyJSON());
-
-app.use("/api/*", cors());
 
 // Cors
 app.use(
@@ -42,7 +39,6 @@ app.route("/category", categoryRoutes);
 app.route("/product", productRoutes);
 app.route("/order", orderRoutes);
 app.route("/upload", uploadRoutes);
-app.route("/color", colorRoutes);
 app.route("/badge", badgesRoutes);
 app.route("/cart", cartRoutes);
 

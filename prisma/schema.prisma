@@ -11,12 +11,13 @@ datasource db {
 model User {
   id             Int       @id @default(autoincrement())
   phoneNumber    String    @unique
-  code           String
-  codeValidUntil DateTime
+  code           String    @default("00000")
+  codeValidUntil DateTime  @default(now())
   isAdmin        Boolean   @default(false)
   Address        Address[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  point          Int       @default(0)
   cart           Cart?
   Order          Order[]
 }
@@ -35,29 +36,18 @@ model Address {
   Order     Order[]
 }
 
-model Category {
-  id            Int        @id @default(autoincrement())
-  name          String     @unique
-  parent        Category?  @relation("Subcategories", fields: [parentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  parentId      Int?
-  subcategories Category[] @relation("Subcategories")
-  Product       Product[]
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-}
-
 model Product {
   id          Int        @id @default(autoincrement())
   name        String
   price       Float
+  discount    Float      @default(0)
+  weight      Float      @default(0)
   description String
   quantity    Int
-  category    Category   @relation(fields: [categoryId], references: [id])
-  categoryId  Int
   images      String[]
+  point       Int        @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-  colors      Color[]    @relation("ProductToColor")
   badges      Badge[]    @relation("ProductToBadge")
   cartItem    CartItem[]
 }
@@ -109,15 +99,6 @@ model CartItem {
   product   Product @relation(fields: [productId], references: [id])
   cartId    Int
   cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-}
-
-model Color {
-  id        Int       @id @default(autoincrement())
-  title     String    @unique
-  hexCode   String    @unique
-  products  Product[] @relation("ProductToColor")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
 }
 
 model Badge {

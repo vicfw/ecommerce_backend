@@ -38,7 +38,9 @@ model Address {
 
 model Product {
   id          Int        @id @default(autoincrement())
-  name        String
+  prName      String     @default("محصول 1")
+  enName      String     @default("product 1")
+  slug        String     @default("1-product 1")
   price       Float
   discount    Float      @default(0)
   weight      Float      @default(0)

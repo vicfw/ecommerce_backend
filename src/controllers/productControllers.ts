@@ -17,7 +17,7 @@ export const getProducts = async (c: Context) => {
 
   return c.json({
     success: true,
-    products,
+    data: products,
     page: query.page ? +query.page : 1,
     total: allProductsCount,
     message: "Products retrieved successfully.",
@@ -25,23 +25,24 @@ export const getProducts = async (c: Context) => {
 };
 
 export const getProduct = async (c: Context) => {
-  const { id } = c.req.param();
+  const { slug } = c.req.param();
 
-  const products = await prisma.product.findFirst({
-    where: { id: +id },
+  const product = await prisma.product.findFirst({
+    where: { slug: slug },
     include: { badges: true },
   });
 
   return c.json({
     success: true,
-    products,
+    data: product,
     message: "Product retrieved successfully.",
   });
 };
 
 export const createProduct = async (c: Context) => {
   const {
-    name,
+    prName,
+    enName,
     price,
     categoryId,
     images,
@@ -59,10 +60,12 @@ export const createProduct = async (c: Context) => {
 
   const product = await prisma.product.create({
     data: {
-      name,
+      prName,
+      enName,
       description,
       price,
       quantity,
+      slug: enName,
       images,
       badges: {
         connect: badges?.map((badgeId: number) => ({ id: Number(badgeId) })),
@@ -73,7 +76,7 @@ export const createProduct = async (c: Context) => {
 
   return c.json({
     success: true,
-    product,
+    data: product,
     message: "Product created successfully.",
   });
 };
@@ -99,7 +102,7 @@ export const updateProduct = async (c: Context) => {
 
   return c.json({
     success: true,
-    product,
+    data: product,
     message: "Product updated successfully.",
   });
 };

@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { address, badge, category, discount, product, user } from "./data";
+import { address, badge, category, discount, productsSeed, user } from "./data";
 
 const prisma = new PrismaClient();
 
@@ -11,9 +11,9 @@ const main = async () => {
   for (const element of user) {
     createdUser = await prisma.user.create({ data: element });
   }
-  for (const element of discount) {
-    createdDiscount = await prisma.discount.create({ data: element });
-  }
+  // for (const element of discount) {
+  //   createdDiscount = await prisma.discount.create({ data: element });
+  // }
 
   for (const element of address) {
     await prisma.address.create({
@@ -25,7 +25,7 @@ const main = async () => {
     const badge = await prisma.badge.create({ data: element });
     createdBadge.push(badge.id);
   }
-  for (const element of product) {
+  for (const element of productsSeed) {
     await prisma.product.create({
       data: {
         ...element,

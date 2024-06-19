@@ -10,6 +10,10 @@ products.post("/", protect, zValidator("json", validation.productSchema), (c) =>
   product.createProduct(c)
 );
 products.get("/", (c) => product.getProducts(c));
+
+// development routes
+products.get("/seed", (c) => product.seedProductsData(c));
+
 products.get("/:slug", (c) => product.getProduct(c));
 products.patch(
   "/:id",

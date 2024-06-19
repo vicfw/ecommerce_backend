@@ -2,6 +2,7 @@ import { Context } from "hono";
 import { prisma } from "../config/prismaClient";
 import { ProductTypes } from "../types";
 import { builderFunc } from "../utils";
+import { productsSeed } from "../../prisma/data";
 
 export const getProducts = async (c: Context) => {
   const query: ProductTypes.ProductQueryStringType = c.req.query();
@@ -115,5 +116,15 @@ export const deleteProduct = async (c: Context) => {
   return c.json({
     success: true,
     message: "Product deleted successfully.",
+  });
+};
+
+export const seedProductsData = async (c: Context) => {
+  await prisma.product.deleteMany();
+
+  await prisma.product.createMany({ data: productsSeed });
+
+  return c.json({
+    success: true,
   });
 };

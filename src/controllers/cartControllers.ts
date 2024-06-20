@@ -16,8 +16,25 @@ export const getCart = async (c: Context) => {
   });
 };
 
+export const cartLength = async (c: Context) => {
+  const user = c.get("user");
+
+  const cart = await prisma.cart.findFirst({
+    where: { userId: user.id },
+    select: { _count: { select: { cartItems: true } } },
+  });
+
+  const cartItemCount = cart?._count?.cartItems || 0;
+
+  return c.json({
+    success: true,
+    data: cartItemCount,
+    message: "Cart length retrieved successfully",
+  });
+};
+
 export const createCart = async (c: Context) => {
-  const { productId, quantity = 1, price } = await c.req.json();
+  const { productId, quantity = 1 } = await c.req.json();
   const user = c.get("user");
 
   const product = await prisma.product.findFirst({
@@ -50,11 +67,13 @@ export const createCart = async (c: Context) => {
         return prisma.cart.update({
           where: { userId: user.id },
           data: {
-            price: parseFloat(price),
+            price: existingCart.price + product.price,
             cartItems: {
               updateMany: {
                 where: { productId: +productId },
-                data: { quantity: +quantity },
+                data: {
+                  quantity: isCartItemExists.quantity + parseInt(quantity),
+                },
               },
             },
           },
@@ -66,7 +85,7 @@ export const createCart = async (c: Context) => {
           where: { userId: user.id },
           data: {
             userId: user.id,
-            price: parseFloat(price),
+            price: product.price,
             cartItems: {
               create: { productId: +productId, quantity: +quantity },
             },
@@ -79,7 +98,7 @@ export const createCart = async (c: Context) => {
       return prisma.cart.create({
         data: {
           userId: user.id,
-          price: parseFloat(price),
+          price: product.price,
           cartItems: {
             create: { quantity: +quantity, productId: +productId },
           },

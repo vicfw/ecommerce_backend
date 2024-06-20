@@ -12,4 +12,6 @@ carts.post("/", protect, zValidator("json", validation.cartSchema), (c) =>
 );
 carts.delete("/", protect, (c) => cart.deleteCart(c));
 
+carts.get("/length", protect, (c) => cart.cartLength(c));
+
 export default carts;

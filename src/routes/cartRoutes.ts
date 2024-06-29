@@ -14,4 +14,11 @@ carts.delete("/", protect, (c) => cart.deleteCart(c));
 
 carts.get("/length", protect, (c) => cart.cartLength(c));
 
+// Anon Carts
+carts.post("/anon", zValidator("json", validation.anonCartSchema), (c) =>
+  cart.createAnonCart(c)
+);
+
+carts.get("/anon/length", (c) => cart.anonCartLength(c));
+
 export default carts;

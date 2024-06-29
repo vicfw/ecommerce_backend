@@ -45,3 +45,9 @@ export const cartSchema = z.object({
   quantity: z.number(),
   productId: z.number(),
 });
+
+export const anonCartSchema = z.object({
+  quantity: z.number(),
+  productId: z.number(),
+  uuid: z.string().optional(),
+});

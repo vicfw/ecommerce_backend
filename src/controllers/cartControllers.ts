@@ -77,7 +77,16 @@ export const createCart = async (c: Context) => {
               },
             },
           },
-          include: { cartItems: { include: { product: true } } },
+          select: {
+            userId: true,
+            createdAt: true,
+            updatedAt: true,
+            id: true,
+            price: true,
+            cartItems: {
+              select: { product: true, quantity: true, id: true },
+            },
+          },
         });
       } else {
         // add new added product to cart
@@ -90,7 +99,16 @@ export const createCart = async (c: Context) => {
               create: { productId: +productId, quantity: +quantity },
             },
           },
-          include: { cartItems: { include: { product: true } } },
+          select: {
+            userId: true,
+            createdAt: true,
+            updatedAt: true,
+            id: true,
+            price: true,
+            cartItems: {
+              select: { id: true, product: true, quantity: true },
+            },
+          },
         });
       }
     } else {
@@ -103,7 +121,16 @@ export const createCart = async (c: Context) => {
             create: { quantity: +quantity, productId: +productId },
           },
         },
-        include: { cartItems: { include: { product: true } } },
+        select: {
+          userId: true,
+          createdAt: true,
+          updatedAt: true,
+          id: true,
+          price: true,
+          cartItems: {
+            select: { product: true, quantity: true, id: true },
+          },
+        },
       });
     }
   });
@@ -123,5 +150,141 @@ export const deleteCart = async (c: Context) => {
   return c.json({
     success: true,
     message: "Cart deleted successfully",
+  });
+};
+
+// Anon Cart Routes
+
+export const createAnonCart = async (c: Context) => {
+  const { productId, quantity = 1, uuid = "" } = await c.req.json();
+  const product = await prisma.product.findFirst({
+    where: { id: +productId },
+  });
+
+  if (
+    !product?.quantity ||
+    product.quantity < quantity ||
+    product.quantity < 0
+  ) {
+    return c.json({
+      success: false,
+      message: "Product quantity is not enough",
+    });
+  }
+
+  // Use a transaction to ensure atomicity and consistency
+  const cart = await prisma.$transaction(async (prisma) => {
+    const existingCart = await prisma.anonCart.findFirst({
+      where: { id: uuid },
+    });
+
+    if (existingCart) {
+      const isCartItemExists = await prisma.cartItem.findFirst({
+        where: { anonCartId: existingCart.id, productId: +productId },
+      });
+      if (isCartItemExists) {
+        // Update existing cart
+        return prisma.anonCart.update({
+          where: { id: uuid },
+          data: {
+            price: existingCart.price + product.price,
+            cartItems: {
+              updateMany: {
+                where: { productId: +productId },
+                data: {
+                  quantity: isCartItemExists.quantity + parseInt(quantity),
+                },
+              },
+            },
+          },
+          select: {
+            createdAt: true,
+            updatedAt: true,
+            id: true,
+            price: true,
+            cartItems: {
+              select: {
+                product: true,
+                quantity: true,
+                id: true,
+              },
+            },
+          },
+        });
+      } else {
+        // add new added product to cart
+        return prisma.anonCart.update({
+          where: { id: uuid },
+          data: {
+            price: product.price,
+            cartItems: {
+              create: {
+                productId: +productId,
+                quantity: +quantity,
+              },
+            },
+          },
+          select: {
+            createdAt: true,
+            updatedAt: true,
+            id: true,
+            price: true,
+            cartItems: {
+              select: {
+                product: true,
+                quantity: true,
+                id: true,
+              },
+            },
+          },
+        });
+      }
+    } else {
+      // Create a new cart
+      return prisma.anonCart.create({
+        data: {
+          price: product.price,
+          cartItems: {
+            create: { quantity: +quantity, productId: +productId },
+          },
+        },
+        select: {
+          createdAt: true,
+          updatedAt: true,
+          id: true,
+          price: true,
+          cartItems: {
+            select: {
+              product: true,
+              quantity: true,
+              id: true,
+            },
+          },
+        },
+      });
+    }
+  });
+
+  return c.json({
+    success: true,
+    data: cart,
+    message: `Cart ${cart ? "updated" : "created"} successfully`,
+  });
+};
+
+export const anonCartLength = async (c: Context) => {
+  const { uuid } = await c.req.header();
+
+  const cart = await prisma.anonCart.findFirst({
+    where: { id: uuid },
+    select: { _count: { select: { cartItems: true } } },
+  });
+
+  const cartItemCount = cart?._count?.cartItems || 0;
+
+  return c.json({
+    success: true,
+    data: cartItemCount,
+    message: "Cart length retrieved successfully",
   });
 };

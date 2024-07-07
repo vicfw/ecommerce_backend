@@ -21,14 +21,16 @@ export const cartLength = async (c: Context) => {
 
   const cart = await prisma.cart.findFirst({
     where: { userId: user.id },
-    select: { _count: { select: { cartItems: true } } },
   });
 
-  const cartItemCount = cart?._count?.cartItems || 0;
+  const cartItemCount = await prisma.cartItem.aggregate({
+    _sum: { quantity: true },
+    where: { cartId: cart?.id },
+  });
 
   return c.json({
     success: true,
-    data: cartItemCount,
+    data: cartItemCount._sum?.quantity || 0,
     message: "Cart length retrieved successfully",
   });
 };
@@ -277,14 +279,17 @@ export const anonCartLength = async (c: Context) => {
 
   const cart = await prisma.anonCart.findFirst({
     where: { id: uuid },
-    select: { _count: { select: { cartItems: true } } },
+    include: { cartItems: true },
   });
 
-  const cartItemCount = cart?._count?.cartItems || 0;
+  const cartItemCount = await prisma.cartItem.aggregate({
+    _sum: { quantity: true },
+    where: { anonCartId: cart?.id },
+  });
 
   return c.json({
     success: true,
-    data: cartItemCount,
+    data: cartItemCount._sum?.quantity || 0,
     message: "Cart length retrieved successfully",
   });
 };

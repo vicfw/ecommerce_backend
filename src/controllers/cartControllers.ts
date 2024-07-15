@@ -1,5 +1,6 @@
 import { Context } from "hono";
 import { prisma } from "../config/prismaClient";
+import { HTTPException } from "hono/http-exception";
 
 export const getCart = async (c: Context) => {
   const user = c.get("user");
@@ -39,6 +40,12 @@ export const createCart = async (c: Context) => {
   const { productId, quantity = 1 } = await c.req.json();
   const user = c.get("user");
 
+  if (quantity === 0 || quantity < 0) {
+    throw new HTTPException(400, {
+      message: "quantity can be 0 or negative number",
+    });
+  }
+
   const product = await prisma.product.findFirst({
     where: { id: +productId },
   });
@@ -65,16 +72,20 @@ export const createCart = async (c: Context) => {
         where: { cartId: existingCart.id, productId: +productId },
       });
       if (isCartItemExists) {
+        const isIncreaseQuantity = isCartItemExists?.quantity < quantity;
+
         // Update existing cart
         return prisma.cart.update({
           where: { userId: user.id },
           data: {
-            price: existingCart.price + product.price,
+            price: isIncreaseQuantity
+              ? existingCart.price + product.price
+              : existingCart.price - product.price,
             cartItems: {
               updateMany: {
                 where: { productId: +productId },
                 data: {
-                  quantity: isCartItemExists.quantity + parseInt(quantity),
+                  quantity: parseInt(quantity),
                 },
               },
             },
@@ -157,8 +168,32 @@ export const deleteCart = async (c: Context) => {
 
 // Anon Cart Routes
 
+export const getAnonCart = async (c: Context) => {
+  const { uuid } = await c.req.header();
+
+  const cart = await prisma.anonCart.findFirst({
+    where: { id: uuid },
+    include: { cartItems: { include: { product: true } } },
+  });
+
+  return c.json({
+    success: true,
+    data: cart,
+    message: "Cart retrieved successfully ",
+  });
+};
+
 export const createAnonCart = async (c: Context) => {
-  const { productId, quantity = 1, uuid = "" } = await c.req.json();
+  let { uuid = "" } = await c.req.header();
+
+  const { productId, quantity = 1 } = await c.req.json();
+
+  if (quantity === 0 || quantity < 0) {
+    throw new HTTPException(400, {
+      message: "quantity can be 0 or negative number",
+    });
+  }
+
   const product = await prisma.product.findFirst({
     where: { id: +productId },
   });
@@ -184,17 +219,22 @@ export const createAnonCart = async (c: Context) => {
       const isCartItemExists = await prisma.cartItem.findFirst({
         where: { anonCartId: existingCart.id, productId: +productId },
       });
+
       if (isCartItemExists) {
+        const isIncreaseQuantity = isCartItemExists?.quantity < quantity;
+
         // Update existing cart
         return prisma.anonCart.update({
           where: { id: uuid },
           data: {
-            price: existingCart.price + product.price,
+            price: isIncreaseQuantity
+              ? existingCart.price + product.price
+              : existingCart.price - product.price,
             cartItems: {
               updateMany: {
                 where: { productId: +productId },
                 data: {
-                  quantity: isCartItemExists.quantity + parseInt(quantity),
+                  quantity: parseInt(quantity),
                 },
               },
             },

@@ -48,3 +48,12 @@ export const isAdmin = async (c: Context, next: Next) => {
     throw new HTTPException(403, { message: "Not authorized as an admin!" });
   }
 };
+
+export const anonProtect = async (c: Context, next: Next) => {
+  let { uuid = "" } = await c.req.header();
+
+  if (!uuid) {
+    throw new HTTPException(401, { message: "uuid is empty." });
+  }
+  await next();
+};

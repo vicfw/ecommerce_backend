@@ -37,27 +37,16 @@ export const cartLength = async (c: Context) => {
 };
 
 export const createCart = async (c: Context) => {
-  const { productId, quantity = 1 } = await c.req.json();
+  const { productId, increment } = await c.req.json();
   const user = c.get("user");
 
-  if (quantity === 0 || quantity < 0) {
+  // Check if the product exists and has a valid quantity
+  const product = await prisma.product.findFirst({ where: { id: +productId } });
+
+  if (!product?.quantity || product.quantity < 0) {
     throw new HTTPException(400, {
-      message: "quantity can be 0 or negative number",
-    });
-  }
-
-  const product = await prisma.product.findFirst({
-    where: { id: +productId },
-  });
-
-  if (
-    !product?.quantity ||
-    product.quantity < quantity ||
-    product.quantity < 0
-  ) {
-    return c.json({
-      success: false,
       message: "Product quantity is not enough",
+      cause: "quantity limit",
     });
   }
 
@@ -67,71 +56,18 @@ export const createCart = async (c: Context) => {
       where: { userId: user.id },
     });
 
-    if (existingCart) {
-      const isCartItemExists = await prisma.cartItem.findFirst({
-        where: { cartId: existingCart.id, productId: +productId },
-      });
-      if (isCartItemExists) {
-        const isIncreaseQuantity = isCartItemExists?.quantity < quantity;
-
-        // Update existing cart
-        return prisma.cart.update({
-          where: { userId: user.id },
-          data: {
-            price: isIncreaseQuantity
-              ? existingCart.price + product.price
-              : existingCart.price - product.price,
-            cartItems: {
-              updateMany: {
-                where: { productId: +productId },
-                data: {
-                  quantity: parseInt(quantity),
-                },
-              },
-            },
-          },
-          select: {
-            userId: true,
-            createdAt: true,
-            updatedAt: true,
-            id: true,
-            price: true,
-            cartItems: {
-              select: { product: true, quantity: true, id: true },
-            },
-          },
-        });
-      } else {
-        // add new added product to cart
-        return prisma.cart.update({
-          where: { userId: user.id },
-          data: {
-            userId: user.id,
-            price: product.price,
-            cartItems: {
-              create: { productId: +productId, quantity: +quantity },
-            },
-          },
-          select: {
-            userId: true,
-            createdAt: true,
-            updatedAt: true,
-            id: true,
-            price: true,
-            cartItems: {
-              select: { id: true, product: true, quantity: true },
-            },
-          },
-        });
-      }
-    } else {
-      // Create a new cart
+    if (!existingCart) {
+      // Create a new cart if it doesn't exist
       return prisma.cart.create({
         data: {
           userId: user.id,
           price: product.price,
           cartItems: {
-            create: { quantity: +quantity, productId: +productId },
+            create: {
+              productId: +productId,
+              quantity: 1,
+              itemPrice: product.price,
+            },
           },
         },
         select: {
@@ -146,6 +82,78 @@ export const createCart = async (c: Context) => {
         },
       });
     }
+
+    const existingCartItem = await prisma.cartItem.findFirst({
+      where: { cartId: existingCart.id, productId: +productId },
+    });
+
+    if (existingCartItem) {
+      // Check if the cart item quantity exceeds the product quantity
+      if (existingCartItem.quantity >= product.quantity && increment) {
+        throw new HTTPException(400, {
+          message: "Product quantity is not enough",
+          cause: "quantity limit",
+        });
+      }
+
+      // Update existing cart item
+      return prisma.cart.update({
+        where: { userId: user.id },
+        data: {
+          price: increment
+            ? existingCart.price + product.price
+            : existingCart.price - product.price,
+          cartItems: {
+            updateMany: {
+              where: { productId: +productId },
+              data: {
+                quantity: increment
+                  ? existingCartItem.quantity + 1
+                  : existingCartItem.quantity - 1,
+                itemPrice: increment
+                  ? existingCartItem.itemPrice + product.price
+                  : existingCartItem.itemPrice - product.price,
+              },
+            },
+          },
+        },
+        select: {
+          userId: true,
+          createdAt: true,
+          updatedAt: true,
+          id: true,
+          price: true,
+          cartItems: {
+            select: { product: true, quantity: true, id: true },
+          },
+        },
+      });
+    }
+
+    // Add new product to cart
+    return prisma.cart.update({
+      where: { userId: user.id },
+      data: {
+        price: existingCart.price + product.price,
+        cartItems: {
+          create: {
+            productId: +productId,
+            quantity: 1,
+            itemPrice: product.price,
+          },
+        },
+      },
+      select: {
+        userId: true,
+        createdAt: true,
+        updatedAt: true,
+        id: true,
+        price: true,
+        cartItems: {
+          select: { id: true, product: true, quantity: true },
+        },
+      },
+    });
   });
 
   return c.json({
@@ -173,7 +181,9 @@ export const getAnonCart = async (c: Context) => {
 
   const cart = await prisma.anonCart.findFirst({
     where: { id: uuid },
-    include: { cartItems: { include: { product: true } } },
+    include: {
+      cartItems: { include: { product: true }, orderBy: { id: "desc" } },
+    },
   });
 
   return c.json({
@@ -184,28 +194,18 @@ export const getAnonCart = async (c: Context) => {
 };
 
 export const createAnonCart = async (c: Context) => {
-  let { uuid = "" } = await c.req.header();
+  const { uuid = "" } = await c.req.header();
+  const { productId, increment = true } = await c.req.json();
 
-  const { productId, quantity = 1 } = await c.req.json();
-
-  if (quantity === 0 || quantity < 0) {
-    throw new HTTPException(400, {
-      message: "quantity can be 0 or negative number",
-    });
-  }
-
+  // Check if the product exists and has a valid quantity
   const product = await prisma.product.findFirst({
     where: { id: +productId },
   });
 
-  if (
-    !product?.quantity ||
-    product.quantity < quantity ||
-    product.quantity < 0
-  ) {
-    return c.json({
-      success: false,
+  if (!product?.quantity || product.quantity < 0) {
+    throw new HTTPException(400, {
       message: "Product quantity is not enough",
+      cause: "quantity limit",
     });
   }
 
@@ -215,79 +215,17 @@ export const createAnonCart = async (c: Context) => {
       where: { id: uuid },
     });
 
-    if (existingCart) {
-      const isCartItemExists = await prisma.cartItem.findFirst({
-        where: { anonCartId: existingCart.id, productId: +productId },
-      });
-
-      if (isCartItemExists) {
-        const isIncreaseQuantity = isCartItemExists?.quantity < quantity;
-
-        // Update existing cart
-        return prisma.anonCart.update({
-          where: { id: uuid },
-          data: {
-            price: isIncreaseQuantity
-              ? existingCart.price + product.price
-              : existingCart.price - product.price,
-            cartItems: {
-              updateMany: {
-                where: { productId: +productId },
-                data: {
-                  quantity: parseInt(quantity),
-                },
-              },
-            },
-          },
-          select: {
-            createdAt: true,
-            updatedAt: true,
-            id: true,
-            price: true,
-            cartItems: {
-              select: {
-                product: true,
-                quantity: true,
-                id: true,
-              },
-            },
-          },
-        });
-      } else {
-        // add new added product to cart
-        return prisma.anonCart.update({
-          where: { id: uuid },
-          data: {
-            price: product.price,
-            cartItems: {
-              create: {
-                productId: +productId,
-                quantity: +quantity,
-              },
-            },
-          },
-          select: {
-            createdAt: true,
-            updatedAt: true,
-            id: true,
-            price: true,
-            cartItems: {
-              select: {
-                product: true,
-                quantity: true,
-                id: true,
-              },
-            },
-          },
-        });
-      }
-    } else {
-      // Create a new cart
+    if (!existingCart) {
+      // Create a new cart if it doesn't exist
       return prisma.anonCart.create({
         data: {
           price: product.price,
           cartItems: {
-            create: { quantity: +quantity, productId: +productId },
+            create: {
+              quantity: 1,
+              productId: +productId,
+              itemPrice: product.price,
+            },
           },
         },
         select: {
@@ -299,12 +237,84 @@ export const createAnonCart = async (c: Context) => {
             select: {
               product: true,
               quantity: true,
+              itemPrice: true,
               id: true,
             },
           },
         },
       });
     }
+
+    const existingCartItem = await prisma.cartItem.findFirst({
+      where: { anonCartId: existingCart.id, productId: +productId },
+    });
+
+    if (existingCartItem) {
+      // Determine cart item is added or removed from cart
+      const updatedQuantity = increment
+        ? existingCartItem.quantity + 1
+        : existingCartItem.quantity - 1;
+      const updatedItemPrice = increment
+        ? existingCartItem.itemPrice + product.price
+        : existingCartItem.itemPrice - product.price;
+
+      // Ensure the updated quantity does not exceed product quantity
+      if (updatedQuantity > product.quantity) {
+        throw new HTTPException(400, {
+          message: "Product quantity is not enough",
+          cause: "quantity limit",
+        });
+      }
+
+      // Update existing cart item
+      return prisma.anonCart.update({
+        where: { id: uuid },
+        data: {
+          price: increment
+            ? existingCart.price + product.price
+            : existingCart.price - product.price,
+          cartItems: {
+            updateMany: {
+              where: { productId: +productId },
+              data: { quantity: updatedQuantity, itemPrice: updatedItemPrice },
+            },
+          },
+        },
+        select: {
+          createdAt: true,
+          updatedAt: true,
+          id: true,
+          price: true,
+          cartItems: {
+            select: { product: true, quantity: true, id: true },
+          },
+        },
+      });
+    }
+
+    // Add new product to cart
+    return prisma.anonCart.update({
+      where: { id: uuid },
+      data: {
+        price: existingCart.price + product.price,
+        cartItems: {
+          create: {
+            productId: +productId,
+            quantity: 1,
+            itemPrice: product.price,
+          },
+        },
+      },
+      select: {
+        createdAt: true,
+        updatedAt: true,
+        id: true,
+        price: true,
+        cartItems: {
+          select: { product: true, quantity: true, id: true },
+        },
+      },
+    });
   });
 
   return c.json({
@@ -331,5 +341,46 @@ export const anonCartLength = async (c: Context) => {
     success: true,
     data: cartItemCount._sum?.quantity || 0,
     message: "Cart length retrieved successfully",
+  });
+};
+
+export const deleteCartItem = async (c: Context) => {
+  const { id } = c.req.param();
+  const user = c.get("user");
+
+  const cart = await prisma.cart.findUnique({ where: { userId: user.id } });
+
+  if (!cart) {
+    throw new HTTPException(400, {
+      message:
+        "The system was unable to locate a cart for the specified user id",
+    });
+  }
+
+  await prisma.cartItem.delete({ where: { cartId: cart.id, id: +id } });
+
+  return c.json({
+    success: true,
+    message: "cartItem deleted successfully",
+  });
+};
+
+export const deleteAnonCartItem = async (c: Context) => {
+  const { id } = c.req.param();
+  const { uuid } = await c.req.header();
+
+  const anonCart = await prisma.anonCart.findUnique({ where: { id: uuid } });
+
+  if (!anonCart) {
+    throw new HTTPException(400, {
+      message: "The system was unable to locate a cart for the specified UUID",
+    });
+  }
+
+  await prisma.cartItem.delete({ where: { anonCartId: anonCart.id, id: +id } });
+
+  return c.json({
+    success: true,
+    message: "cartItem deleted successfully",
   });
 };

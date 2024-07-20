@@ -42,12 +42,12 @@ export const productSchema = z.object({
 export const partialProductSchema = productSchema.partial();
 
 export const cartSchema = z.object({
-  quantity: z.number(),
+  increment: z.boolean(),
   productId: z.number(),
 });
 
 export const anonCartSchema = z.object({
-  quantity: z.number(),
+  increment: z.boolean(),
   productId: z.number(),
   uuid: z.string().optional(),
 });

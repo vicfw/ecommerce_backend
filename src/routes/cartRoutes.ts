@@ -12,16 +12,17 @@ carts.post("/", protect, zValidator("json", validation.cartSchema), (c) =>
   cart.createCart(c)
 );
 carts.delete("/", protect, (c) => cart.deleteCart(c));
-
+carts.delete("/cartItem/:id", protect, (c) => cart.deleteCartItem(c));
 carts.get("/length", protect, (c) => cart.cartLength(c));
 
 // Anon Carts
 carts.get("/anon", anonProtect, (c) => cart.getAnonCart(c));
-
 carts.post("/anon", zValidator("json", validation.anonCartSchema), (c) =>
   cart.createAnonCart(c)
 );
-
 carts.get("/anon/length", anonProtect, (c) => cart.anonCartLength(c));
+carts.delete("/anon/cartItem/:id", anonProtect, (c) =>
+  cart.deleteAnonCartItem(c)
+);
 
 export default carts;

@@ -1,6 +1,7 @@
 import { Context } from "hono";
 import { prisma } from "../config/prismaClient";
 import { HTTPException } from "hono/http-exception";
+import { calculateProfit } from "../utils/calculateProfit";
 
 export const getCart = async (c: Context) => {
   const user = c.get("user");
@@ -186,6 +187,8 @@ export const getAnonCart = async (c: Context) => {
     },
   });
 
+  console.log(cart, "cart");
+
   return c.json({
     success: true,
     data: cart,
@@ -220,6 +223,9 @@ export const createAnonCart = async (c: Context) => {
       return prisma.anonCart.create({
         data: {
           price: product.price,
+          discountPrice: 0,
+          profitFromDiscount: calculateProfit(product.price, product.discount),
+          totalDiscountPercentage: product.discount,
           cartItems: {
             create: {
               quantity: 1,
@@ -273,6 +279,13 @@ export const createAnonCart = async (c: Context) => {
           price: increment
             ? existingCart.price + product.price
             : existingCart.price - product.price,
+          discountPrice: 0,
+          profitFromDiscount: increment
+            ? calculateProfit(product.price, product.discount) +
+              existingCart.profitFromDiscount
+            : calculateProfit(product.price, product.discount) -
+              existingCart.profitFromDiscount,
+          totalDiscountPercentage: 0,
           cartItems: {
             updateMany: {
               where: { productId: +productId },
@@ -297,6 +310,13 @@ export const createAnonCart = async (c: Context) => {
       where: { id: uuid },
       data: {
         price: existingCart.price + product.price,
+        discountPrice: 0,
+        profitFromDiscount: increment
+          ? calculateProfit(product.price, product.discount) +
+            existingCart.profitFromDiscount
+          : calculateProfit(product.price, product.discount) -
+            existingCart.profitFromDiscount,
+        totalDiscountPercentage: 0,
         cartItems: {
           create: {
             productId: +productId,
@@ -348,7 +368,10 @@ export const deleteCartItem = async (c: Context) => {
   const { id } = c.req.param();
   const user = c.get("user");
 
-  const cart = await prisma.cart.findUnique({ where: { userId: user.id } });
+  const cart = await prisma.cart.findUnique({
+    where: { userId: user.id },
+    include: { cartItems: true },
+  });
 
   if (!cart) {
     throw new HTTPException(400, {
@@ -358,6 +381,18 @@ export const deleteCartItem = async (c: Context) => {
   }
 
   await prisma.cartItem.delete({ where: { cartId: cart.id, id: +id } });
+
+  if (cart.cartItems.length === 1) {
+    await prisma.anonCart.update({
+      where: { id: user.id },
+      data: {
+        price: 0,
+        profitFromDiscount: 0,
+        totalDiscountPercentage: 0,
+        discountPrice: 0,
+      },
+    });
+  }
 
   return c.json({
     success: true,
@@ -369,7 +404,10 @@ export const deleteAnonCartItem = async (c: Context) => {
   const { id } = c.req.param();
   const { uuid } = await c.req.header();
 
-  const anonCart = await prisma.anonCart.findUnique({ where: { id: uuid } });
+  const anonCart = await prisma.anonCart.findUnique({
+    where: { id: uuid },
+    include: { cartItems: true },
+  });
 
   if (!anonCart) {
     throw new HTTPException(400, {
@@ -378,6 +416,18 @@ export const deleteAnonCartItem = async (c: Context) => {
   }
 
   await prisma.cartItem.delete({ where: { anonCartId: anonCart.id, id: +id } });
+
+  if (anonCart.cartItems.length === 1) {
+    await prisma.anonCart.update({
+      where: { id: uuid },
+      data: {
+        price: 0,
+        profitFromDiscount: 0,
+        totalDiscountPercentage: 0,
+        discountPrice: 0,
+      },
+    });
+  }
 
   return c.json({
     success: true,

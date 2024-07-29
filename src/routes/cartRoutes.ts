@@ -25,4 +25,11 @@ carts.delete("/anon/cartItem/:id", anonProtect, (c) =>
   cart.deleteAnonCartItem(c)
 );
 
+carts.post(
+  "/anon/match",
+  zValidator("json", validation.anonCartMatchSchema),
+  anonProtect,
+  (c) => cart.matchAnonCart(c)
+);
+
 export default carts;

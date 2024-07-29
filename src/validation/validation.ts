@@ -51,3 +51,7 @@ export const anonCartSchema = z.object({
   productId: z.number(),
   uuid: z.string().optional(),
 });
+
+export const anonCartMatchSchema = z.object({
+  userId: z.number(),
+});

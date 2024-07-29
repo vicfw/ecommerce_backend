@@ -1,14 +1,19 @@
 import { Context } from "hono";
 import { prisma } from "../config/prismaClient";
 import { HTTPException } from "hono/http-exception";
-import { calculateProfit } from "../utils/calculateProfit";
+import {
+  calculatePriceAfterDiscount,
+  calculateProfit,
+} from "../utils/calculateProfit";
 
 export const getCart = async (c: Context) => {
   const user = c.get("user");
 
   const cart = await prisma.cart.findFirst({
     where: { userId: user.id },
-    include: { cartItems: { include: { product: true } } },
+    include: {
+      cartItems: { include: { product: true }, orderBy: { id: "desc" } },
+    },
   });
 
   return c.json({
@@ -24,6 +29,14 @@ export const cartLength = async (c: Context) => {
   const cart = await prisma.cart.findFirst({
     where: { userId: user.id },
   });
+
+  if (!cart) {
+    return c.json({
+      success: true,
+      data: 0,
+      message: "Cart length retrieved successfully",
+    });
+  }
 
   const cartItemCount = await prisma.cartItem.aggregate({
     _sum: { quantity: true },
@@ -63,22 +76,32 @@ export const createCart = async (c: Context) => {
         data: {
           userId: user.id,
           price: product.price,
+          discountPrice: calculatePriceAfterDiscount(
+            product.price,
+            product.discount
+          ),
+          profitFromDiscount: calculateProfit(product.price, product.discount),
+          totalDiscountPercentage: product.discount,
           cartItems: {
             create: {
-              productId: +productId,
               quantity: 1,
+              productId: +productId,
               itemPrice: product.price,
             },
           },
         },
         select: {
-          userId: true,
           createdAt: true,
           updatedAt: true,
           id: true,
           price: true,
           cartItems: {
-            select: { product: true, quantity: true, id: true },
+            select: {
+              product: true,
+              quantity: true,
+              itemPrice: true,
+              id: true,
+            },
           },
         },
       });
@@ -88,9 +111,30 @@ export const createCart = async (c: Context) => {
       where: { cartId: existingCart.id, productId: +productId },
     });
 
+    const discountPrice = await calculateDiscountPrice(
+      increment,
+      product.price,
+      product.discount,
+      existingCart.discountPrice
+    );
+    const profitFromDiscount = await calculateProfitFromDiscount(
+      increment,
+      product.price,
+      product.discount,
+      existingCart.profitFromDiscount
+    );
+
     if (existingCartItem) {
       // Check if the cart item quantity exceeds the product quantity
-      if (existingCartItem.quantity >= product.quantity && increment) {
+      const updatedQuantity = increment
+        ? existingCartItem.quantity + 1
+        : existingCartItem.quantity - 1;
+      const updatedItemPrice = increment
+        ? existingCartItem.itemPrice + product.price
+        : existingCartItem.itemPrice - product.price;
+
+      // Ensure the updated quantity does not exceed product quantity
+      if (updatedQuantity > product.quantity) {
         throw new HTTPException(400, {
           message: "Product quantity is not enough",
           cause: "quantity limit",
@@ -104,17 +148,13 @@ export const createCart = async (c: Context) => {
           price: increment
             ? existingCart.price + product.price
             : existingCart.price - product.price,
+          discountPrice,
+          profitFromDiscount,
+          totalDiscountPercentage: product.discount,
           cartItems: {
             updateMany: {
               where: { productId: +productId },
-              data: {
-                quantity: increment
-                  ? existingCartItem.quantity + 1
-                  : existingCartItem.quantity - 1,
-                itemPrice: increment
-                  ? existingCartItem.itemPrice + product.price
-                  : existingCartItem.itemPrice - product.price,
-              },
+              data: { quantity: updatedQuantity, itemPrice: updatedItemPrice },
             },
           },
         },
@@ -136,6 +176,9 @@ export const createCart = async (c: Context) => {
       where: { userId: user.id },
       data: {
         price: existingCart.price + product.price,
+        discountPrice,
+        profitFromDiscount,
+        totalDiscountPercentage: product.discount,
         cartItems: {
           create: {
             productId: +productId,
@@ -187,8 +230,6 @@ export const getAnonCart = async (c: Context) => {
     },
   });
 
-  console.log(cart, "cart");
-
   return c.json({
     success: true,
     data: cart,
@@ -223,7 +264,10 @@ export const createAnonCart = async (c: Context) => {
       return prisma.anonCart.create({
         data: {
           price: product.price,
-          discountPrice: 0,
+          discountPrice: calculatePriceAfterDiscount(
+            product.price,
+            product.discount
+          ),
           profitFromDiscount: calculateProfit(product.price, product.discount),
           totalDiscountPercentage: product.discount,
           cartItems: {
@@ -254,6 +298,18 @@ export const createAnonCart = async (c: Context) => {
     const existingCartItem = await prisma.cartItem.findFirst({
       where: { anonCartId: existingCart.id, productId: +productId },
     });
+    const discountPrice = await calculateDiscountPrice(
+      increment,
+      product.price,
+      product.discount,
+      existingCart.discountPrice
+    );
+    const profitFromDiscount = await calculateProfitFromDiscount(
+      increment,
+      product.price,
+      product.discount,
+      existingCart.profitFromDiscount
+    );
 
     if (existingCartItem) {
       // Determine cart item is added or removed from cart
@@ -279,13 +335,9 @@ export const createAnonCart = async (c: Context) => {
           price: increment
             ? existingCart.price + product.price
             : existingCart.price - product.price,
-          discountPrice: 0,
-          profitFromDiscount: increment
-            ? calculateProfit(product.price, product.discount) +
-              existingCart.profitFromDiscount
-            : calculateProfit(product.price, product.discount) -
-              existingCart.profitFromDiscount,
-          totalDiscountPercentage: 0,
+          discountPrice,
+          profitFromDiscount,
+          totalDiscountPercentage: product.discount,
           cartItems: {
             updateMany: {
               where: { productId: +productId },
@@ -310,13 +362,9 @@ export const createAnonCart = async (c: Context) => {
       where: { id: uuid },
       data: {
         price: existingCart.price + product.price,
-        discountPrice: 0,
-        profitFromDiscount: increment
-          ? calculateProfit(product.price, product.discount) +
-            existingCart.profitFromDiscount
-          : calculateProfit(product.price, product.discount) -
-            existingCart.profitFromDiscount,
-        totalDiscountPercentage: 0,
+        discountPrice,
+        profitFromDiscount,
+        totalDiscountPercentage: product.discount,
         cartItems: {
           create: {
             productId: +productId,
@@ -382,14 +430,17 @@ export const deleteCartItem = async (c: Context) => {
 
   await prisma.cartItem.delete({ where: { cartId: cart.id, id: +id } });
 
+  console.log(cart, "cart");
+
   if (cart.cartItems.length === 1) {
-    await prisma.anonCart.update({
-      where: { id: user.id },
+    await prisma.cart.update({
+      where: { userId: user.id },
       data: {
         price: 0,
         profitFromDiscount: 0,
         totalDiscountPercentage: 0,
         discountPrice: 0,
+        cartItems: undefined,
       },
     });
   }
@@ -433,4 +484,93 @@ export const deleteAnonCartItem = async (c: Context) => {
     success: true,
     message: "cartItem deleted successfully",
   });
+};
+
+export const matchAnonCart = async (c: Context) => {
+  const { uuid } = await c.req.header();
+  const { userId } = await c.req.json();
+
+  console.log(uuid, "uuid");
+
+  console.log(userId, "userId");
+
+  const anonCart = await prisma.anonCart.findUnique({
+    where: { id: uuid },
+    include: { cartItems: true },
+  });
+
+  if (!anonCart) {
+    return;
+  }
+
+  const isCartExist = await prisma.cart.findUnique({ where: { userId } });
+
+  if (isCartExist) {
+    await prisma.cart.delete({ where: { userId } });
+  }
+
+  const mappedCartItems = anonCart.cartItems.map((cartItem) => ({
+    productId: cartItem.productId,
+    quantity: cartItem.quantity,
+    itemPrice: cartItem.itemPrice,
+  }));
+
+  const cart = await prisma.cart.create({
+    data: {
+      cartItems: {
+        createMany: {
+          data: mappedCartItems,
+        },
+      },
+      price: anonCart?.price,
+      profitFromDiscount: anonCart?.profitFromDiscount,
+      discountPrice: anonCart.discountPrice,
+      totalDiscountPercentage: anonCart.totalDiscountPercentage,
+      userId: userId,
+    },
+  });
+
+  return c.json({
+    success: true,
+    data: cart,
+    message: "Cart replaced successfully",
+  });
+};
+
+//  TODO : Convert This functions to raw sql (database side)
+
+const calculateDiscountPrice = async (
+  increment: boolean,
+  productPrice: number,
+  productDiscount: number,
+  previousDiscount: number
+) => {
+  const discountPriceResult =
+    (await prisma.$queryRaw`SELECT calculate_discount_price(${productPrice}, ${productDiscount}) AS discount_price`) as {
+      discount_price: string;
+    }[];
+
+  const finalDiscountPrice = increment
+    ? previousDiscount + parseFloat(discountPriceResult[0].discount_price)
+    : previousDiscount - parseFloat(discountPriceResult[0].discount_price);
+
+  return finalDiscountPrice;
+};
+
+const calculateProfitFromDiscount = async (
+  increment: boolean,
+  productPrice: number,
+  productDiscount: number,
+  previousProfitFromDiscount: number
+) => {
+  const profitPriceResult =
+    (await prisma.$queryRaw`SELECT calculate_profit(${productPrice}, ${productDiscount}) AS profit`) as {
+      profit: string;
+    }[];
+
+  const finalProfitFromDiscount = increment
+    ? parseFloat(profitPriceResult[0].profit) + previousProfitFromDiscount
+    : previousProfitFromDiscount - parseFloat(profitPriceResult[0].profit);
+
+  return finalProfitFromDiscount;
 };

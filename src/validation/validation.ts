@@ -1,10 +1,18 @@
 import { z } from "zod";
 
 export const addressSchema = z.object({
+  address: z.string(),
   street: z.string(),
   city: z.string(),
-  country: z.string(),
   zipCode: z.string(),
+  province: z.string(),
+  plate: z.string(),
+  floor: z.string(),
+  receiverName: z.string(),
+  receiverLastName: z.string(),
+  receiverPhoneNumber: z.string(),
+  neighborhood: z.string(),
+  isDefault: z.boolean(),
 });
 
 export const addressSchemaPartial = addressSchema.partial();

@@ -23,17 +23,24 @@ model User {
 }
 
 model Address {
-  id        Int      @id @default(autoincrement())
-  street    String
-  city      String
-  country   String
-  zipCode   String
-  isDefault Boolean  @default(false)
-  user      User     @relation(fields: [userId], references: [id])
-  userId    Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  Order     Order[]
+  id                  Int      @id @default(autoincrement())
+  address             String
+  street              String
+  city                String
+  neighborhood        String
+  province            String
+  plate               String
+  floor               String
+  zipCode             String
+  isDefault           Boolean  @default(false)
+  receiverName        String
+  receiverLastName    String
+  receiverPhoneNumber String
+  user                User     @relation(fields: [userId], references: [id])
+  userId              Int
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  Order               Order[]
 }
 
 model Product {

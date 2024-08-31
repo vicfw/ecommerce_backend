@@ -1,5 +1,6 @@
 import { Context } from "hono";
 import { prisma } from "../config/prismaClient";
+import { HTTPException } from "hono/http-exception";
 
 export const getAddress = async (c: Context) => {
   const user = c.get("user");
@@ -24,8 +25,10 @@ export const createAddress = async (c: Context) => {
   });
 
   if (!addresses.length && !body.isDefault) {
-    c.status(400);
-    throw new Error("Please add a default address");
+    throw new HTTPException(400, {
+      message: "Please add a default address",
+      cause: "default address is undefined",
+    });
   }
 
   const address = await prisma.address.create({

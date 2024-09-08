@@ -4,6 +4,7 @@ import { genToken } from "../utils";
 import { HTTPException } from "hono/http-exception";
 import { generateSMSCode } from "../utils/genSMSCode";
 import { dateAddition } from "../utils/dateAddition";
+import { User } from "@prisma/client";
 
 export const getUsers = async (c: Context) => {
   const users = await prisma.user.findMany();
@@ -152,23 +153,41 @@ export const loginUser = async (c: Context) => {
 //   });
 // };
 
-// export const updateUser = async (c: Context) => {
-//   const { name, email } = await c.req.json();
-//   const user = c.get("user");
+export const updateUser = async (c: Context) => {
+  const { name, lastName } = await c.req.json();
+  const user = c.get("user");
 
-//   const updatedUser = await prisma.user.update({
-//     where: {
-//       id: user.id,
-//     },
-//     data: {
-//       name,
-//       email,
-//     },
-//   });
+  const updatedUser = await prisma.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      name,
+      lastName,
+    },
+  });
 
-//   return c.json({
-//     success: true,
-//     data: updatedUser,
-//     message: "User updated successfully",
-//   });
-// };
+  return c.json({
+    success: true,
+    data: {
+      phoneNumber: updatedUser.phoneNumber,
+      name: updatedUser.name,
+      lastName: updatedUser.lastName,
+    },
+    message: "User updated successfully",
+  });
+};
+
+export const getMe = async (c: Context) => {
+  const user: User = c.get("user");
+
+  return c.json({
+    success: true,
+    data: {
+      phoneNumber: user.phoneNumber,
+      name: user.name,
+      lastName: user.lastName,
+    },
+    message: "User found successfully",
+  });
+};

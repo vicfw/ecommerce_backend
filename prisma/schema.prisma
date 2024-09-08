@@ -11,6 +11,8 @@ datasource db {
 model User {
   id             Int       @id @default(autoincrement())
   phoneNumber    String    @unique
+  name           String?
+  lastName       String?
   code           String    @default("00000")
   codeValidUntil DateTime  @default(now())
   isAdmin        Boolean   @default(false)

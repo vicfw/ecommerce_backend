@@ -11,6 +11,7 @@ const main = async () => {
   for (const element of user) {
     createdUser = await prisma.user.create({ data: element });
   }
+
   // for (const element of discount) {
   //   createdDiscount = await prisma.discount.create({ data: element });
   // }
@@ -25,11 +26,11 @@ const main = async () => {
     const badge = await prisma.badge.create({ data: element });
     createdBadge.push(badge.id);
   }
+
   for (const element of productsSeed) {
     await prisma.product.create({
       data: {
         ...element,
-
         badges: {
           connect: createdBadge?.map((badgeId) => ({
             id: Number(badgeId),

@@ -1,4 +1,3 @@
-import { Product } from "@prisma/client";
 import { ProductWithoutId } from "../src/types/product.type";
 
 export const user = [
@@ -10,16 +9,18 @@ export const user = [
 
 export const address = [
   {
-    street: "Golestan",
-    city: "Urmia",
-    country: "iran",
+    address: "ارومیه ، ایثار ، خیابان جمهوری ، مجتمع کلستان",
+    street: "رسالت",
+    city: "ارومیه",
     zipCode: "1234",
-  },
-  {
-    street: "Golestan",
-    city: "Urmia",
-    country: "iran",
-    zipCode: "1234",
+    province: "آذربایجان غربی",
+    neighborhood: "جمهوری",
+    plate: "آ 7",
+    floor: "طبقه 3",
+    receiverName: "فرید",
+    receiverLastName: "بیغم",
+    receiverPhoneNumber: "09362712519",
+    isDefault: true,
   },
 ];
 

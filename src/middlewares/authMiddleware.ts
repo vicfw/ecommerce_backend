@@ -21,6 +21,12 @@ export const protect = async (c: Context, next: Next) => {
       const { id } = await Jwt.verify(token, Bun.env.JWT_SECRET || "");
       const user = await prisma.user.findUnique({ where: { id: +id } });
 
+      if (!user) {
+        throw new HTTPException(403, {
+          message: "Invalid token! You are not authorized!",
+        });
+      }
+
       c.set("user", user);
 
       await next();
@@ -30,6 +36,8 @@ export const protect = async (c: Context, next: Next) => {
       });
     }
   }
+
+  console.log(token, "token");
 
   if (!token) {
     throw new HTTPException(403, {

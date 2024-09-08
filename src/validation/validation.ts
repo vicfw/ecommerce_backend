@@ -7,7 +7,7 @@ export const addressSchema = z.object({
   zipCode: z.string(),
   province: z.string(),
   plate: z.string(),
-  floor: z.string(),
+  floor: z.string().optional(),
   receiverName: z.string(),
   receiverLastName: z.string(),
   receiverPhoneNumber: z.string(),

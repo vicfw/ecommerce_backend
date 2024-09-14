@@ -24,12 +24,12 @@ export const createAddress = async (c: Context) => {
     where: { userId: user.id, isDefault: true },
   });
 
-  if (!addresses.length && !body.isDefault) {
-    throw new HTTPException(400, {
-      message: "Please add a default address",
-      cause: "default address is undefined",
-    });
-  }
+  // if (!addresses.length && !body.isDefault) {
+  //   throw new HTTPException(400, {
+  //     message: "Please add a default address",
+  //     cause: "default address is undefined",
+  //   });
+  // }
 
   const address = await prisma.address.create({
     data: { userId: user.id, ...body },

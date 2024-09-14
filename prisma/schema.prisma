@@ -29,7 +29,6 @@ model Address {
   address             String
   street              String
   city                String
-  neighborhood        String
   province            String
   plate               String
   floor               String

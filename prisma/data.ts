@@ -14,7 +14,6 @@ export const address = [
     city: "ارومیه",
     zipCode: "1234",
     province: "آذربایجان غربی",
-    neighborhood: "جمهوری",
     plate: "آ 7",
     floor: "طبقه 3",
     receiverName: "فرید",

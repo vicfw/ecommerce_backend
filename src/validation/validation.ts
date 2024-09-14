@@ -11,7 +11,6 @@ export const addressSchema = z.object({
   receiverName: z.string(),
   receiverLastName: z.string(),
   receiverPhoneNumber: z.string(),
-  neighborhood: z.string(),
   isDefault: z.boolean(),
 });
 

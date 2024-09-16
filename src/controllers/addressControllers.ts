@@ -1,12 +1,17 @@
 import { Context } from "hono";
 import { prisma } from "../config/prismaClient";
-import { HTTPException } from "hono/http-exception";
 
 export const getAddress = async (c: Context) => {
   const user = c.get("user");
 
   const address = await prisma.address.findMany({
     where: { userId: user.id },
+    orderBy: [
+      {
+        userId: "asc",
+      },
+      { id: "asc" },
+    ],
   });
 
   return c.json({
@@ -20,19 +25,14 @@ export const createAddress = async (c: Context) => {
   const body = await c.req.json();
   const user = c.get("user");
 
-  const addresses = await prisma.address.findMany({
-    where: { userId: user.id, isDefault: true },
+  const addresses = await prisma.address.count({
+    where: { userId: user.id },
   });
 
-  // if (!addresses.length && !body.isDefault) {
-  //   throw new HTTPException(400, {
-  //     message: "Please add a default address",
-  //     cause: "default address is undefined",
-  //   });
-  // }
+  const isDefault = addresses === 0;
 
   const address = await prisma.address.create({
-    data: { userId: user.id, ...body },
+    data: { userId: user.id, ...body, isDefault },
   });
 
   return c.json({
@@ -44,6 +44,21 @@ export const createAddress = async (c: Context) => {
 export const updateAddress = async (c: Context) => {
   const { id } = c.req.param();
   const body = await c.req.json();
+
+  if (body.isDefault) {
+    await prisma.address.updateMany({
+      where: {
+        userId: body.userId,
+        isDefault: true,
+        id: {
+          not: +id,
+        },
+      },
+      data: {
+        isDefault: false,
+      },
+    });
+  }
 
   const updatedAddress = await prisma.address.update({
     where: {

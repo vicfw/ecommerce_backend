@@ -6,3 +6,4 @@ export * as upload from "./uploadControllers";
 export * as badge from "./badgeControllers";
 export * as cart from "./cartControllers";
 export * as order from "./orderControllers";
+export * as deliveryCost from "./deliveryCostControllers.";

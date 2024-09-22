@@ -139,3 +139,10 @@ model Badge {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
+
+model DeliveryCost {
+  id        Int      @id @default(autoincrement())
+  cost      Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -13,9 +13,6 @@ export function calculatePriceAfterDiscount(
 ) {
   if (!discountRate) return originalPrice;
   const profit = originalPrice * (discountRate / 100);
-  // console.log(originalPrice, "originalPrice");
-  // console.log(discountRate, "discountRate");
-  // console.log(profit, "profit");
 
   return originalPrice - profit;
 }

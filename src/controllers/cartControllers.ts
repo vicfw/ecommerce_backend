@@ -117,6 +117,7 @@ export const createCart = async (c: Context) => {
       product.discount,
       existingCart.discountPrice
     );
+
     const profitFromDiscount = await calculateProfitFromDiscount(
       increment,
       product.price,
@@ -428,22 +429,45 @@ export const deleteCartItem = async (c: Context) => {
     });
   }
 
-  await prisma.cartItem.delete({ where: { cartId: cart.id, id: +id } });
+  const cartItem = await prisma.cartItem.findFirst({
+    where: { id: +id, cartId: cart.id },
+    include: { product: true },
+  });
 
-  console.log(cart, "cart");
+  if (!cartItem) {
+    throw new HTTPException(400, {
+      message:
+        "The system was unable to locate a cartItem for the specified id",
+    });
+  }
 
   if (cart.cartItems.length === 1) {
+    await prisma.cart.delete({ where: { userId: user.id } });
+
+    return c.json({
+      success: true,
+      message: "cartItem deleted successfully",
+    });
+  } else {
+    const { product } = cartItem;
+    const discountPrice = product.price * (product.discount / 100);
+    const price = cart.price - cartItem.itemPrice;
+
+    console.log(discountPrice, "discountPrice");
+
     await prisma.cart.update({
       where: { userId: user.id },
       data: {
-        price: 0,
-        profitFromDiscount: 0,
-        totalDiscountPercentage: 0,
-        discountPrice: 0,
-        cartItems: undefined,
+        price,
+        profitFromDiscount: cart.profitFromDiscount - discountPrice,
+        totalDiscountPercentage:
+          cart.totalDiscountPercentage - product.discount,
+        discountPrice: cart.discountPrice - (product.price - discountPrice),
       },
     });
   }
+
+  await prisma.cartItem.delete({ where: { cartId: cart.id, id: +id } });
 
   return c.json({
     success: true,

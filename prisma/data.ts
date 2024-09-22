@@ -116,3 +116,5 @@ export const discount = [
     endDate: "2027-05-18 12:20:33.409",
   },
 ];
+
+export const deliveryCost = { cost: 45 };

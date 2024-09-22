@@ -19,4 +19,8 @@ users.get("/me", protect, (c) => user.getMe(c));
 // Update User Profile
 users.patch("/", protect, (c) => user.updateUser(c));
 
+// Update User Role
+
+users.patch("/role", protect, (c) => user.updateUserRole(c));
+
 export default users;

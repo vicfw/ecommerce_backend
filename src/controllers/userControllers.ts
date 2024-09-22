@@ -178,6 +178,25 @@ export const updateUser = async (c: Context) => {
   });
 };
 
+export const updateUserRole = async (c: Context) => {
+  const { isAdmin, phoneNumber } = await c.req.json();
+
+  const updatedUser = await prisma.user.update({
+    where: {
+      phoneNumber,
+    },
+    data: {
+      isAdmin,
+    },
+  });
+
+  return c.json({
+    success: true,
+    data: updatedUser,
+    message: "User updated successfully",
+  });
+};
+
 export const getMe = async (c: Context) => {
   const user: User = c.get("user");
 

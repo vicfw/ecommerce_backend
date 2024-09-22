@@ -12,6 +12,7 @@ import {
   orderRoutes,
   productRoutes,
   uploadRoutes,
+  deliveryCostRoutes,
 } from "./routes";
 import { v2 as cloudinary } from "cloudinary";
 import { limiter } from "./middlewares/rateLimitMiddleware";
@@ -41,6 +42,7 @@ app.route("/order", orderRoutes);
 app.route("/upload", uploadRoutes);
 app.route("/badge", badgesRoutes);
 app.route("/cart", cartRoutes);
+app.route("/deliveryCost", deliveryCostRoutes);
 
 cloudinary.config({
   cloud_name: Bun.env.CLOUDINARY_CLOUD_NAME,

@@ -1,5 +1,13 @@
 import { PrismaClient } from "@prisma/client";
-import { address, badge, category, discount, productsSeed, user } from "./data";
+import {
+  address,
+  badge,
+  category,
+  deliveryCost,
+  discount,
+  productsSeed,
+  user,
+} from "./data";
 
 const prisma = new PrismaClient();
 
@@ -39,6 +47,12 @@ const main = async () => {
       },
     });
   }
+
+  await prisma.deliveryCost.create({
+    data: {
+      cost: deliveryCost.cost,
+    },
+  });
 };
 
 main()

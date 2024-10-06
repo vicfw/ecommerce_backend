@@ -16,3 +16,15 @@ export const createDeliveryCost = async (c: Context) => {
     message: "deliveryCost created successfully",
   });
 };
+
+export const getDeliveryCost = async (c: Context) => {
+  const deliveryCost = await prisma.deliveryCost.findFirst({
+    where: { id: 1 },
+  });
+
+  return c.json({
+    success: true,
+    data: deliveryCost,
+    message: "deliveryCost created successfully",
+  });
+};

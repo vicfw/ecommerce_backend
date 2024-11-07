@@ -12,7 +12,10 @@ export const getCart = async (c: Context) => {
   const cart = await prisma.cart.findFirst({
     where: { userId: user.id },
     include: {
-      cartItems: { include: { product: true }, orderBy: { id: "desc" } },
+      cartItems: {
+        select: { quantity: true, product: true, itemPrice: true },
+        orderBy: { id: "desc" },
+      },
     },
   });
 
@@ -227,7 +230,10 @@ export const getAnonCart = async (c: Context) => {
   const cart = await prisma.anonCart.findFirst({
     where: { id: uuid },
     include: {
-      cartItems: { include: { product: true }, orderBy: { id: "desc" } },
+      cartItems: {
+        orderBy: { id: "desc" },
+        select: { quantity: true, product: true, itemPrice: true },
+      },
     },
   });
 

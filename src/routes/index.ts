@@ -1,4 +1,4 @@
-export { default as UserRoutes } from "./userRoutes";
+export { default as userRoutes } from "./userRoutes";
 export { default as addressRoutes } from "./addressRoutes";
 export { default as categoryRoutes } from "./categoryRoutes";
 export { default as productRoutes } from "./productRoutes";
@@ -7,3 +7,4 @@ export { default as badgesRoutes } from "./badgeRoutes";
 export { default as cartRoutes } from "./cartRoutes";
 export { default as orderRoutes } from "./orderRoutes";
 export { default as deliveryCostRoutes } from "./deliveryCostRoutes";
+export { default as paymentRoutes } from "./paymentRoutes";

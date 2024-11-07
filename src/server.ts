@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
-import { errorHandler, notFound, protect } from "./middlewares";
+import { errorHandler, notFound } from "./middlewares";
 import {
-  UserRoutes,
+  userRoutes,
   addressRoutes,
   badgesRoutes,
   cartRoutes,
@@ -13,6 +13,7 @@ import {
   productRoutes,
   uploadRoutes,
   deliveryCostRoutes,
+  paymentRoutes,
 } from "./routes";
 import { v2 as cloudinary } from "cloudinary";
 import { limiter } from "./middlewares/rateLimitMiddleware";
@@ -34,7 +35,7 @@ app.use(
 app.use("*", limiter);
 
 // User Routes
-app.route("/users", UserRoutes);
+app.route("/users", userRoutes);
 app.route("/address", addressRoutes);
 app.route("/category", categoryRoutes);
 app.route("/product", productRoutes);
@@ -43,6 +44,7 @@ app.route("/upload", uploadRoutes);
 app.route("/badge", badgesRoutes);
 app.route("/cart", cartRoutes);
 app.route("/deliveryCost", deliveryCostRoutes);
+app.route("/payment", paymentRoutes);
 
 cloudinary.config({
   cloud_name: Bun.env.CLOUDINARY_CLOUD_NAME,

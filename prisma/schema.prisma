@@ -45,21 +45,22 @@ model Address {
 }
 
 model Product {
-  id          Int        @id @default(autoincrement())
-  prName      String     @default("محصول 1")
-  enName      String     @default("product 1")
-  slug        String     @default("1-product-1")
+  id          Int         @id @default(autoincrement())
+  prName      String      @default("محصول 1")
+  enName      String      @default("product 1")
+  slug        String      @default("1-product-1")
   price       Float
-  discount    Float      @default(0)
-  weight      Float      @default(0)
+  discount    Float       @default(0)
+  weight      Float       @default(0)
   description String
   quantity    Int
   images      String[]
-  point       Int        @default(0)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  badges      Badge[]    @relation("ProductToBadge")
+  point       Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  badges      Badge[]     @relation("ProductToBadge")
   cartItem    CartItem[]
+  OrderItem   OrderItem[]
 }
 
 model Order {
@@ -68,11 +69,21 @@ model Order {
   userId      Int
   address     Address     @relation(fields: [addressId], references: [id])
   addressId   Int
-  items       OrderItem[]
   totalAmount Float
   status      OrderStatus @default(PENDING)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  orderItem   OrderItem[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  order     Order   @relation(fields: [orderId], references: [id])
+  orderId   Int
+  product   Product @relation(fields: [productId], references: [id])
+  productId Int
+  quantity  Int
+  price     Float // Store the product price at the time of purchase
 }
 
 enum OrderStatus {
@@ -83,40 +94,28 @@ enum OrderStatus {
   CANCELLED
 }
 
-model OrderItem {
-  id         Int       @id @default(autoincrement())
-  order      Order     @relation(fields: [orderId], references: [id])
-  orderId    Int
-  cart       Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  cartId     Int
-  AnonCart   AnonCart? @relation(fields: [anonCartId], references: [id])
-  anonCartId String?
-}
-
 model Cart {
-  id                      Int         @id @default(autoincrement())
-  user                    User        @relation(fields: [userId], references: [id])
-  userId                  Int         @unique
-  price                   Float       @default(0)
-  discountPrice           Float       @default(0)
-  profitFromDiscount      Float       @default(0)
-  totalDiscountPercentage Int         @default(0)
-  createdAt               DateTime    @default(now())
-  updatedAt               DateTime    @updatedAt
+  id                      Int        @id @default(autoincrement())
+  user                    User       @relation(fields: [userId], references: [id])
+  userId                  Int        @unique
+  price                   Float      @default(0)
+  discountPrice           Float      @default(0)
+  profitFromDiscount      Float      @default(0)
+  totalDiscountPercentage Int        @default(0)
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
   cartItems               CartItem[]
-  OrderItem               OrderItem[]
 }
 
 model AnonCart {
-  id                      String      @id @default(uuid())
-  price                   Float       @default(0)
-  discountPrice           Float       @default(0)
-  profitFromDiscount      Float       @default(0)
-  totalDiscountPercentage Int         @default(0)
-  createdAt               DateTime    @default(now())
-  updatedAt               DateTime    @updatedAt
+  id                      String     @id @default(uuid())
+  price                   Float      @default(0)
+  discountPrice           Float      @default(0)
+  profitFromDiscount      Float      @default(0)
+  totalDiscountPercentage Int        @default(0)
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
   cartItems               CartItem[]
-  OrderItem               OrderItem[]
 }
 
 model CartItem {

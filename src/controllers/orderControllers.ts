@@ -1,6 +1,7 @@
 import { Context } from "hono";
 import { prisma } from "../config/prismaClient";
 import { HTTPException } from "hono/http-exception";
+import { OrderStatus } from "@prisma/client";
 
 export const createOrder = async (c: Context) => {
   const user = c.get("user");
@@ -57,9 +58,38 @@ export const createOrder = async (c: Context) => {
 
 export const getOrder = async (c: Context) => {
   const { id } = c.req.param();
+
   const order = await prisma.order.findFirst({
-    where: { id: +id },
+    where: {
+      id: +id,
+    },
     include: { orderItem: { include: { product: true } } },
+  });
+
+  return c.json({
+    success: true,
+    data: order,
+    message: "Order retrieved successfully",
+  });
+};
+
+export const getOrders = async (c: Context) => {
+  const status = c.req.query("status") as OrderStatus | undefined;
+  const user = c.get("user");
+
+  const order = await prisma.order.findMany({
+    where: {
+      userId: user.id,
+      ...(status ? { status } : undefined),
+    },
+    select: {
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      id: true,
+      totalAmount: true,
+      orderItem: { select: { product: true } },
+    },
   });
 
   return c.json({

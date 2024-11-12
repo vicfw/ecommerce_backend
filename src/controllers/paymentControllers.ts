@@ -40,8 +40,6 @@ export const verifyPayment = async (c: Context) => {
 
   const verificationData = await response.json();
 
-  console.log(verificationData, "verificationData");
-
   if (verificationData.result === 100 || verificationData.result === 201) {
     const updatedOrder = await prisma.order.update({
       where: {

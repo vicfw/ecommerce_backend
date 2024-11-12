@@ -18,7 +18,8 @@ export const protect = async (c: Context, next: Next) => {
         return c.json({ message: "Not authorized to access this route" });
       }
 
-      const { id } = await Jwt.verify(token, Bun.env.JWT_SECRET || "");
+      const decoded = await Jwt.verify(token, Bun.env.JWT_SECRET || "");
+      const id = (decoded as { id: string }).id;
       const user = await prisma.user.findUnique({ where: { id: +id } });
 
       if (!user) {
@@ -37,15 +38,12 @@ export const protect = async (c: Context, next: Next) => {
     }
   }
 
-  console.log(token, "token");
-
   if (!token) {
     throw new HTTPException(403, {
       message: "Not authorized! No token found!",
     });
   }
 };
-
 // Check if user is admin
 export const isAdmin = async (c: Context, next: Next) => {
   const user = c.get("user");

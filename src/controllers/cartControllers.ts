@@ -459,8 +459,6 @@ export const deleteCartItem = async (c: Context) => {
     const discountPrice = product.price * (product.discount / 100);
     const price = cart.price - cartItem.itemPrice;
 
-    console.log(discountPrice, "discountPrice");
-
     await prisma.cart.update({
       where: { userId: user.id },
       data: {
@@ -519,10 +517,6 @@ export const deleteAnonCartItem = async (c: Context) => {
 export const matchAnonCart = async (c: Context) => {
   const { uuid } = await c.req.header();
   const { userId } = await c.req.json();
-
-  console.log(uuid, "uuid");
-
-  console.log(userId, "userId");
 
   const anonCart = await prisma.anonCart.findUnique({
     where: { id: uuid },

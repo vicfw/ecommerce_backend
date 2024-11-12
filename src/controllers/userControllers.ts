@@ -133,7 +133,6 @@ export const loginUser = async (c: Context) => {
 //     where: { id },
 //     include: { Address: true },
 //   });
-//   console.log(user, "user");
 
 //   if (!user) {
 //     c.status(400);

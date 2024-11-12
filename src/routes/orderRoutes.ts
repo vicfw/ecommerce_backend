@@ -5,6 +5,7 @@ import { protect } from "../middlewares";
 const orders = new Hono();
 
 orders.post("/", protect, (c) => order.createOrder(c));
+orders.get("/", protect, (c) => order.getOrders(c));
 orders.get("/:id", protect, (c) => order.getOrder(c));
 
 export default orders;

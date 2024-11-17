@@ -23,12 +23,15 @@ export const createOrder = async (c: Context) => {
     throw new HTTPException(400, { message: "Cart is empty" });
   }
 
+  console.log(cart, "cart");
+
   // Create the order
   const order = await prisma.order.create({
     data: {
       userId: user.id,
       addressId: defaultAddress.id,
       totalAmount: cart.discountPrice,
+      profitFromDiscount: cart.profitFromDiscount,
     },
   });
 
@@ -88,6 +91,7 @@ export const getOrders = async (c: Context) => {
       updatedAt: true,
       id: true,
       totalAmount: true,
+      profitFromDiscount: true,
       orderItem: { select: { product: true } },
     },
   });
@@ -96,5 +100,25 @@ export const getOrders = async (c: Context) => {
     success: true,
     data: order,
     message: "Order retrieved successfully",
+  });
+};
+
+export const getStatusCount = async (c: Context) => {
+  const user = c.get("user");
+
+  const status = await prisma.order.groupBy({
+    by: ["status"],
+    where: {
+      userId: user.id,
+    },
+    _count: {
+      status: true,
+    },
+  });
+
+  return c.json({
+    success: true,
+    data: status,
+    message: "status count retrieved successfully",
   });
 };

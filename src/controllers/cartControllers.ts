@@ -13,7 +13,7 @@ export const getCart = async (c: Context) => {
     where: { userId: user.id },
     include: {
       cartItems: {
-        select: { quantity: true, product: true, itemPrice: true },
+        select: { quantity: true, product: true, itemPrice: true, id: true },
         orderBy: { id: "desc" },
       },
     },

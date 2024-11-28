@@ -17,7 +17,9 @@ export const addressesTable = pgTable("addresses", {
   zipCode: varchar({ length: 255 }).notNull(),
   isDefault: boolean().notNull().default(false),
   receiverName: varchar({ length: 255 }).notNull(),
-  receiverLastName: varchar({ length: 255 }),
+  receiverLastName: varchar({ length: 255 }).notNull(),
+  receiverPhoneNumber: varchar({ length: 255 }).notNull(),
+
   userId: integer().notNull(),
   createdAt: timestamp().notNull().defaultNow(),
   updatedAt: timestamp().notNull().defaultNow(),

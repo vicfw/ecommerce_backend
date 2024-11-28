@@ -173,7 +173,7 @@ export const updateUser = async (c: Context) => {
   const { name, lastName } = await c.req.json();
   const user = c.get("user");
 
-  const updatedUserArray = await db
+  const [updatedUser] = await db
     .update(usersTable)
     .set({
       name,
@@ -185,8 +185,6 @@ export const updateUser = async (c: Context) => {
       name: usersTable.name,
       lastName: usersTable.lastName,
     });
-
-  const updatedUser = updatedUserArray[0];
 
   return c.json({
     success: true,
@@ -202,13 +200,11 @@ export const updateUser = async (c: Context) => {
 export const updateUserRole = async (c: Context) => {
   const { isAdmin, phoneNumber } = await c.req.json();
 
-  const updatedUserArray = await db
+  const [updatedUser] = await db
     .update(usersTable)
     .set({ isAdmin })
     .where(eq(usersTable.phoneNumber, phoneNumber))
     .returning();
-
-  const updatedUser = updatedUserArray[0];
 
   return c.json({
     success: true,

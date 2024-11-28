@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
   boolean,
   integer,
@@ -5,6 +6,7 @@ import {
   timestamp,
   varchar,
 } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
 
 export const addressesTable = pgTable("addresses", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -24,3 +26,10 @@ export const addressesTable = pgTable("addresses", {
   createdAt: timestamp().notNull().defaultNow(),
   updatedAt: timestamp().notNull().defaultNow(),
 });
+
+export const addressRelations = relations(addressesTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [addressesTable.userId],
+    references: [usersTable.id],
+  }),
+}));

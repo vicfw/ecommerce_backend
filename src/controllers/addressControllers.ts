@@ -6,16 +6,6 @@ import { addressesTable } from "../db/schema/addresses";
 export const getAddress = async (c: Context) => {
   const user = c.get("user");
 
-  // const address = await prisma.address.findMany({
-  //   where: { userId: user.id },
-  //   orderBy: [
-  //     {
-  //       userId: "asc",
-  //     },
-  //     { id: "asc" },
-  //   ],
-  // });
-
   const address = await db.query.addresses.findMany({
     where: eq(addressesTable.userId, user.id),
   });

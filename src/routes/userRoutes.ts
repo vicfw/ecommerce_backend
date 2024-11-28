@@ -20,7 +20,6 @@ users.get("/me", protect, (c) => user.getMe(c));
 users.patch("/", protect, (c) => user.updateUser(c));
 
 // Update User Role
-
-users.patch("/role", protect, (c) => user.updateUserRole(c));
+users.patch("/role", isAdmin, protect, (c) => user.updateUserRole(c));
 
 export default users;

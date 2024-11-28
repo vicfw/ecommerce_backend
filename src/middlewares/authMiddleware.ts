@@ -2,6 +2,9 @@ import { Context, Next } from "hono";
 import { Jwt } from "hono/utils/jwt";
 import { prisma } from "../config/prismaClient";
 import { HTTPException } from "hono/http-exception";
+import { db } from "../db";
+import { eq } from "drizzle-orm";
+import { usersTable } from "../db/schema/users";
 
 // Protect Route for Authenticated Users
 export const protect = async (c: Context, next: Next) => {
@@ -20,7 +23,10 @@ export const protect = async (c: Context, next: Next) => {
 
       const decoded = await Jwt.verify(token, Bun.env.JWT_SECRET || "");
       const id = (decoded as { id: string }).id;
-      const user = await prisma.user.findUnique({ where: { id: +id } });
+
+      const user = await db.query.users.findFirst({
+        where: eq(usersTable.id, +id),
+      });
 
       if (!user) {
         throw new HTTPException(403, {

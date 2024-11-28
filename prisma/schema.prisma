@@ -75,6 +75,7 @@ model Order {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
   orderItem          OrderItem[]
+  deliveryAmount     Int
 }
 
 model OrderItem {
@@ -84,7 +85,7 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id])
   productId Int
   quantity  Int
-  price     Float // Store the product price at the time of purchase
+  price     Float
 }
 
 enum OrderStatus {
@@ -97,27 +98,31 @@ enum OrderStatus {
 }
 
 model Cart {
-  id                      Int        @id @default(autoincrement())
-  user                    User       @relation(fields: [userId], references: [id])
-  userId                  Int        @unique
-  price                   Float      @default(0)
-  discountPrice           Float      @default(0)
-  profitFromDiscount      Float      @default(0)
-  totalDiscountPercentage Int        @default(0)
-  createdAt               DateTime   @default(now())
-  updatedAt               DateTime   @updatedAt
+  id                      Int          @id @default(autoincrement())
+  user                    User         @relation(fields: [userId], references: [id])
+  userId                  Int          @unique
+  price                   Float        @default(0)
+  discountPrice           Float        @default(0)
+  profitFromDiscount      Float        @default(0)
+  totalDiscountPercentage Int          @default(0)
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
   cartItems               CartItem[]
+  deliveryCostId          Int
+  deliveryCost            DeliveryCost @relation(fields: [deliveryCostId], references: [id])
 }
 
 model AnonCart {
-  id                      String     @id @default(uuid())
-  price                   Float      @default(0)
-  discountPrice           Float      @default(0)
-  profitFromDiscount      Float      @default(0)
-  totalDiscountPercentage Int        @default(0)
-  createdAt               DateTime   @default(now())
-  updatedAt               DateTime   @updatedAt
+  id                      String       @id @default(uuid())
+  price                   Float        @default(0)
+  discountPrice           Float        @default(0)
+  profitFromDiscount      Float        @default(0)
+  totalDiscountPercentage Int          @default(0)
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
   cartItems               CartItem[]
+  deliveryCostId          Int
+  deliveryCost            DeliveryCost @relation(fields: [deliveryCostId], references: [id])
 }
 
 model CartItem {
@@ -142,8 +147,10 @@ model Badge {
 }
 
 model DeliveryCost {
-  id        Int      @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   cost      Float
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  cart      Cart[]
+  AnonCart  AnonCart[]
 }

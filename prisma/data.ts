@@ -117,4 +117,4 @@ export const discount = [
   },
 ];
 
-export const deliveryCost = { cost: 45 };
+export const deliveryCost = { cost: 45000 };

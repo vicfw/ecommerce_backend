@@ -1,15 +1,21 @@
-import { Context } from "hono";
-import { prisma } from "../config/prismaClient";
-import { genToken } from "../utils";
-import { HTTPException } from "hono/http-exception";
-import { generateSMSCode } from "../utils/genSMSCode";
-import { dateAddition } from "../utils/dateAddition";
 import { User } from "@prisma/client";
+import { eq } from "drizzle-orm";
+import { Context } from "hono";
+import { HTTPException } from "hono/http-exception";
+import { db } from "../db";
+import { usersTable } from "../db/schema/users";
+import { genToken } from "../utils";
+import { dateAddition } from "../utils/dateAddition";
+import { generateSMSCode } from "../utils/genSMSCode";
 
 export const getUsers = async (c: Context) => {
-  const users = await prisma.user.findMany();
+  const users = await db.query.users.findMany();
 
-  return c.json({ users });
+  return c.json({
+    success: true,
+    data: users,
+    message: "Users fetched successfully",
+  });
 };
 
 export const createUser = async (c: Context) => {
@@ -25,7 +31,10 @@ export const createUser = async (c: Context) => {
   });
 
   // Check for existing user
-  const userExists = await prisma.user.findUnique({ where: { phoneNumber } });
+  const userExists = await db.query.users.findFirst({
+    where: eq(usersTable.phoneNumber, phoneNumber),
+  });
+
   if (userExists) {
     const codeValidUntil = new Date(userExists.codeValidUntil);
     const presentTime = new Date(Date.now());
@@ -37,13 +46,21 @@ export const createUser = async (c: Context) => {
     //   });
     // }
 
-    await prisma.user.update({
-      where: { phoneNumber },
-      data: {
+    // await prisma.user.update({
+    //   where: { phoneNumber },
+    //   data: {
+    //     code: hashedPassword,
+    //     codeValidUntil: dateWithExtra2Minutes,
+    //   },
+    // });
+
+    await db
+      .update(usersTable)
+      .set({
         code: hashedPassword,
         codeValidUntil: dateWithExtra2Minutes,
-      },
-    });
+      })
+      .where(eq(usersTable.phoneNumber, phoneNumber));
 
     return c.json({
       success: true,
@@ -52,17 +69,15 @@ export const createUser = async (c: Context) => {
     });
   }
 
-  const user = await prisma.user.create({
-    data: {
-      phoneNumber,
-      code: hashedPassword,
-      codeValidUntil: dateWithExtra2Minutes,
-    },
+  const user = await db.insert(usersTable).values({
+    phoneNumber,
+    code: hashedPassword,
+    codeValidUntil: dateWithExtra2Minutes,
   });
 
   if (!user) {
     throw new HTTPException(500, {
-      message: "Custom error message",
+      message: "Something went wrong",
     });
   }
 
@@ -83,7 +98,10 @@ export const loginUser = async (c: Context) => {
     });
   }
 
-  const user = await prisma.user.findUnique({ where: { phoneNumber } });
+  const user = await db.query.users.findFirst({
+    where: eq(usersTable.phoneNumber, phoneNumber),
+  });
+
   if (!user) {
     throw new HTTPException(401, {
       message: "No user found with this phone number",
@@ -129,9 +147,9 @@ export const loginUser = async (c: Context) => {
 
 // export const getUser = async (c: Context) => {
 //   const id = parseInt(c.req.param("id"));
-//   const user = await prisma.user.findUnique({
-//     where: { id },
-//     include: { Address: true },
+
+//   const user = await db.query.users.findFirst({
+//     where: eq(usersTable.id, id),
 //   });
 
 //   if (!user) {
@@ -144,9 +162,8 @@ export const loginUser = async (c: Context) => {
 //     data: {
 //       id: user.id,
 //       name: user.name,
-//       email: user.email,
 //       isAdmin: user.isAdmin,
-//       address: user.Address,
+//       // address: user.Address,
 //     },
 //     message: "User found successfully",
 //   });
@@ -156,15 +173,20 @@ export const updateUser = async (c: Context) => {
   const { name, lastName } = await c.req.json();
   const user = c.get("user");
 
-  const updatedUser = await prisma.user.update({
-    where: {
-      id: user.id,
-    },
-    data: {
+  const updatedUserArray = await db
+    .update(usersTable)
+    .set({
       name,
       lastName,
-    },
-  });
+    })
+    .where(eq(usersTable.id, user.id))
+    .returning({
+      phoneNumber: usersTable.phoneNumber,
+      name: usersTable.name,
+      lastName: usersTable.lastName,
+    });
+
+  const updatedUser = updatedUserArray[0];
 
   return c.json({
     success: true,
@@ -180,14 +202,13 @@ export const updateUser = async (c: Context) => {
 export const updateUserRole = async (c: Context) => {
   const { isAdmin, phoneNumber } = await c.req.json();
 
-  const updatedUser = await prisma.user.update({
-    where: {
-      phoneNumber,
-    },
-    data: {
-      isAdmin,
-    },
-  });
+  const updatedUserArray = await db
+    .update(usersTable)
+    .set({ isAdmin })
+    .where(eq(usersTable.phoneNumber, phoneNumber))
+    .returning();
+
+  const updatedUser = updatedUserArray[0];
 
   return c.json({
     success: true,

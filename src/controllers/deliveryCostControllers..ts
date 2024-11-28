@@ -4,11 +4,7 @@ import { prisma } from "../config/prismaClient";
 export const createDeliveryCost = async (c: Context) => {
   const { cost } = await c.req.json();
 
-  const deliveryCost = await prisma.deliveryCost.upsert({
-    where: { id: 1 },
-    update: { cost },
-    create: { cost },
-  });
+  const deliveryCost = await prisma.deliveryCost.create({ data: { cost } });
 
   return c.json({
     success: true,
@@ -19,7 +15,9 @@ export const createDeliveryCost = async (c: Context) => {
 
 export const getDeliveryCost = async (c: Context) => {
   const deliveryCost = await prisma.deliveryCost.findFirst({
-    where: { id: 1 },
+    orderBy: {
+      createdAt: "desc",
+    },
   });
 
   return c.json({

@@ -8,8 +8,13 @@ export const createOrder = async (c: Context) => {
 
   const cart = await prisma.cart.findFirst({
     where: { userId: user.id },
-    include: { cartItems: { include: { product: true } } },
+    include: {
+      cartItems: { include: { product: true } },
+      deliveryCost: { select: { cost: true } },
+    },
   });
+
+  console.log(cart, "cart");
 
   const defaultAddress = await prisma.address.findFirst({
     where: { userId: user.id, isDefault: true },
@@ -23,8 +28,6 @@ export const createOrder = async (c: Context) => {
     throw new HTTPException(400, { message: "Cart is empty" });
   }
 
-  console.log(cart, "cart");
-
   // Create the order
   const order = await prisma.order.create({
     data: {
@@ -32,6 +35,7 @@ export const createOrder = async (c: Context) => {
       addressId: defaultAddress.id,
       totalAmount: cart.discountPrice,
       profitFromDiscount: cart.profitFromDiscount,
+      deliveryAmount: cart.deliveryCost.cost,
     },
   });
 
@@ -66,7 +70,11 @@ export const getOrder = async (c: Context) => {
     where: {
       id: +id,
     },
-    include: { orderItem: { include: { product: true } } },
+    include: {
+      orderItem: { include: { product: true } },
+      user: { select: { name: true, lastName: true, phoneNumber: true } },
+      address: { select: { address: true } },
+    },
   });
 
   return c.json({

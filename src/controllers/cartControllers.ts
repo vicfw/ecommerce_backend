@@ -13,8 +13,20 @@ export const getCart = async (c: Context) => {
     where: { userId: user.id },
     include: {
       cartItems: {
-        select: { quantity: true, product: true, itemPrice: true, id: true },
+        select: {
+          quantity: true,
+          product: true,
+          itemPrice: true,
+          id: true,
+          productId: true,
+        },
         orderBy: { id: "desc" },
+      },
+      deliveryCost: {
+        select: {
+          id: true,
+          cost: true,
+        },
       },
     },
   });
@@ -54,7 +66,7 @@ export const cartLength = async (c: Context) => {
 };
 
 export const createCart = async (c: Context) => {
-  const { productId, increment } = await c.req.json();
+  const { productId, increment, deliveryCostId } = await c.req.json();
   const user = c.get("user");
 
   // Check if the product exists and has a valid quantity
@@ -85,6 +97,7 @@ export const createCart = async (c: Context) => {
           ),
           profitFromDiscount: calculateProfit(product.price, product.discount),
           totalDiscountPercentage: product.discount,
+          deliveryCostId,
           cartItems: {
             create: {
               quantity: 1,
@@ -246,7 +259,7 @@ export const getAnonCart = async (c: Context) => {
 
 export const createAnonCart = async (c: Context) => {
   const { uuid = "" } = await c.req.header();
-  const { productId, increment = true } = await c.req.json();
+  const { productId, increment = true, deliveryCostId } = await c.req.json();
 
   // Check if the product exists and has a valid quantity
   const product = await prisma.product.findFirst({
@@ -277,6 +290,7 @@ export const createAnonCart = async (c: Context) => {
           ),
           profitFromDiscount: calculateProfit(product.price, product.discount),
           totalDiscountPercentage: product.discount,
+          deliveryCostId,
           cartItems: {
             create: {
               quantity: 1,
@@ -548,6 +562,7 @@ export const matchAnonCart = async (c: Context) => {
       },
       price: anonCart?.price,
       profitFromDiscount: anonCart?.profitFromDiscount,
+      deliveryCostId: anonCart.deliveryCostId,
       discountPrice: anonCart.discountPrice,
       totalDiscountPercentage: anonCart.totalDiscountPercentage,
       userId: userId,

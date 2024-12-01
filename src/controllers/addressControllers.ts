@@ -6,7 +6,7 @@ import { addressesTable } from "../db/schema/addresses";
 export const getAddress = async (c: Context) => {
   const user = c.get("user");
 
-  const address = await db.query.addresses.findMany({
+  const address = await db.query.addressesTable.findMany({
     where: eq(addressesTable.userId, user.id),
   });
 

@@ -1,8 +1,11 @@
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { usersTable } from "./schema/users";
 import { Pool } from "pg";
-import { addressesTable } from "./schema/addresses";
+import * as userSchema from "./schema/users";
+import * as addressSchema from "./schema/addresses";
+import * as productsSchema from "./schema/products";
+import * as badgesSchema from "./schema/badges";
+import * as badgesToProductsSchema from "./schema/badgesToProducts";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL_DRIZZLE,
@@ -11,7 +14,10 @@ const pool = new Pool({
 export const db = drizzle({
   client: pool,
   schema: {
-    users: usersTable,
-    addresses: addressesTable,
+    ...userSchema,
+    ...addressSchema,
+    ...productsSchema,
+    ...badgesSchema,
+    ...badgesToProductsSchema,
   },
 });

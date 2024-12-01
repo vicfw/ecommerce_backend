@@ -36,11 +36,9 @@ export const badgesSchema = z.object({
 export const partialBadgeSchema = colorsSchema.partial();
 
 export const productSchema = z.object({
-  name: z.string({ required_error: "Name is Required" }).trim(),
   price: z.number(),
   description: z.string(),
   quantity: z.number(),
-  categoryId: z.number(),
   images: z.array(z.string()),
   colors: z.array(z.number()).optional(),
   badges: z.array(z.number()).optional(),

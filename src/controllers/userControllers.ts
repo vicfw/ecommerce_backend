@@ -9,7 +9,7 @@ import { dateAddition } from "../utils/dateAddition";
 import { generateSMSCode } from "../utils/genSMSCode";
 
 export const getUsers = async (c: Context) => {
-  const users = await db.query.users.findMany();
+  const users = await db.query.usersTable.findMany();
 
   return c.json({
     success: true,
@@ -31,7 +31,7 @@ export const createUser = async (c: Context) => {
   });
 
   // Check for existing user
-  const userExists = await db.query.users.findFirst({
+  const userExists = await db.query.usersTable.findFirst({
     where: eq(usersTable.phoneNumber, phoneNumber),
   });
 
@@ -98,7 +98,7 @@ export const loginUser = async (c: Context) => {
     });
   }
 
-  const user = await db.query.users.findFirst({
+  const user = await db.query.usersTable.findFirst({
     where: eq(usersTable.phoneNumber, phoneNumber),
   });
 

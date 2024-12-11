@@ -56,6 +56,7 @@ const main = async () => {
 };
 
 main()
+  .then(() => console.log("seed done"))
   .catch((err) => {
     console.log(err);
     process.exit(0);

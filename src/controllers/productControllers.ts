@@ -1,26 +1,48 @@
+import { asc, eq, getTableColumns, sql } from "drizzle-orm";
 import { Context } from "hono";
+import { productsSeed } from "../../prisma/data";
 import { prisma } from "../config/prismaClient";
+import { db } from "../db";
+import { badgesTable } from "../db/schema/badges";
+import { badgesToProducts } from "../db/schema/badgesToProducts";
+import { productsTable } from "../db/schema/products";
 import { ProductTypes } from "../types";
 import { builderFunc } from "../utils";
-import { productsSeed } from "../../prisma/data";
-import { db } from "../db";
-import { productsTable } from "../db/schema/products";
-import { badgesToProducts } from "../db/schema/badgesToProducts";
-import { eq, getTableColumns, sql } from "drizzle-orm";
-import products from "../routes/productRoutes";
-import { badgesTable } from "../db/schema/badges";
 
 export const getProducts = async (c: Context) => {
   const query: ProductTypes.ProductQueryStringType = c.req.query();
   const pagination = builderFunc.paginationBuilder(query);
 
-  const products = await prisma.product.findMany({
-    skip: pagination.skip,
-    take: pagination.limit,
-    include: { badges: true },
-  });
+  const products = await db
+    .select({
+      ...getTableColumns(productsTable),
+      badges: sql<string>`
+    COALESCE(
+      JSON_AGG(
+        CASE WHEN ${badgesTable.id} IS NOT NULL 
+        THEN JSON_BUILD_OBJECT(
+          'id', ${badgesTable.id},
+          'title', ${badgesTable.title},
+          'icon', ${badgesTable.icon}  
+        )
+        ELSE NULL END
+      ) FILTER (WHERE ${badgesTable.id} IS NOT NULL),
+      '[]'
+    )
+  `.as("badges"),
+    })
+    .from(productsTable)
+    .leftJoin(
+      badgesToProducts,
+      eq(productsTable.id, badgesToProducts.productId)
+    )
+    .leftJoin(badgesTable, eq(badgesToProducts.badgeId, badgesTable.id))
+    .groupBy(productsTable.id)
+    .limit(pagination.limit)
+    .offset(pagination.skip)
+    .orderBy(asc(productsTable.id));
 
-  const allProductsCount = await prisma.product.count();
+  const allProductsCount = await db.$count(productsTable);
 
   return c.json({
     success: true,
@@ -30,14 +52,35 @@ export const getProducts = async (c: Context) => {
     message: "Products retrieved successfully.",
   });
 };
-
 export const getProduct = async (c: Context) => {
   const { slug } = c.req.param();
 
-  const product = await prisma.product.findFirst({
-    where: { slug: slug },
-    include: { badges: true },
-  });
+  const product = await db
+    .select({
+      ...getTableColumns(productsTable),
+      badges: sql<string>`
+    COALESCE(
+      JSON_AGG(
+        CASE WHEN ${badgesTable.id} IS NOT NULL
+        THEN JSON_BUILD_OBJECT(
+          'id', ${badgesTable.id},
+          'title', ${badgesTable.title},
+          'icon', ${badgesTable.icon}
+        )
+        ELSE NULL END
+      ) FILTER (WHERE ${badgesTable.id} IS NOT NULL),
+      '[]'
+    )
+  `.as("badges"),
+    })
+    .from(productsTable)
+    .leftJoin(
+      badgesToProducts,
+      eq(productsTable.id, badgesToProducts.productId)
+    )
+    .leftJoin(badgesTable, eq(badgesToProducts.badgeId, badgesTable.id))
+    .where(eq(productsTable.slug, slug))
+    .groupBy(productsTable.id);
 
   return c.json({
     success: true,
@@ -45,7 +88,7 @@ export const getProduct = async (c: Context) => {
     message: "Product retrieved successfully.",
   });
 };
-
+// migrated to drizzle orm until here
 export const createProduct = async (c: Context) => {
   const {
     prName,
@@ -56,6 +99,7 @@ export const createProduct = async (c: Context) => {
     quantity,
     badges,
     weight,
+    discount,
   } = await c.req.json();
 
   const product = await db.transaction(async (tx) => {
@@ -70,6 +114,7 @@ export const createProduct = async (c: Context) => {
         slug: enName,
         images,
         weight,
+        discount,
       })
       .returning();
 

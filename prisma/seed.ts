@@ -1,13 +1,11 @@
 import { PrismaClient } from "@prisma/client";
-import {
-  address,
-  badge,
-  category,
-  deliveryCost,
-  discount,
-  productsSeed,
-  user,
-} from "./data";
+import { db } from "../src/db";
+import { addressesTable } from "../src/db/schema/addresses";
+import { usersTable } from "../src/db/schema/users";
+import { address, badge, deliveryCost, productsSeed, user } from "./data";
+import { badgesTable } from "../src/db/schema/badges";
+import { productsTable } from "../src/db/schema/products";
+import { badgesToProducts } from "../src/db/schema/badgesToProducts";
 
 const prisma = new PrismaClient();
 
@@ -17,7 +15,8 @@ const main = async () => {
   let createdBadge: number[] = [];
 
   for (const element of user) {
-    createdUser = await prisma.user.create({ data: element });
+    const [user] = await db.insert(usersTable).values(element).returning();
+    createdUser = user;
   }
 
   // for (const element of discount) {
@@ -25,34 +24,31 @@ const main = async () => {
   // }
 
   for (const element of address) {
-    await prisma.address.create({
-      data: { ...element, userId: createdUser?.id! },
-    });
+    await db
+      .insert(addressesTable)
+      .values({ ...element, userId: createdUser?.id! });
   }
 
   for (const element of badge) {
-    const badge = await prisma.badge.create({ data: element });
+    const [badge] = await db.insert(badgesTable).values(element).returning();
     createdBadge.push(badge.id);
   }
 
   for (const element of productsSeed) {
-    await prisma.product.create({
-      data: {
-        ...element,
-        badges: {
-          connect: createdBadge?.map((badgeId) => ({
-            id: Number(badgeId),
-          })),
-        },
-      },
-    });
+    const [product] = await db
+      .insert(productsTable)
+      .values(element)
+      .returning();
+    await db
+      .insert(badgesToProducts)
+      .values({ productId: product.id, badgeId: createdBadge[0] });
   }
 
-  await prisma.deliveryCost.create({
-    data: {
-      cost: deliveryCost.cost,
-    },
-  });
+  // await prisma.deliveryCost.create({
+  //   data: {
+  //     cost: deliveryCost.cost,
+  //   },
+  // });
 };
 
 main()

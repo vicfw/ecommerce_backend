@@ -88,7 +88,6 @@ export const getProduct = async (c: Context) => {
     message: "Product retrieved successfully.",
   });
 };
-// migrated to drizzle orm until here
 export const createProduct = async (c: Context) => {
   const {
     prName,
@@ -165,20 +164,25 @@ export const updateProduct = async (c: Context) => {
   const { id } = c.req.param();
   const body = await c.req.json();
 
-  const product = await prisma.product.update({
-    where: {
-      id: +id,
-    },
-    data: {
-      ...body,
-      badges: {
-        set: body.badges?.map((badgeId: number) => ({ id: Number(badgeId) })),
-      },
-    },
-    include: {
-      badges: true,
-    },
-  });
+  const [isExist] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.id, +id));
+
+  if (!isExist) {
+    return c.json({
+      success: false,
+      message: "Product not found.",
+    });
+  }
+
+  const [product] = await db
+    .update(productsTable)
+    .set(body)
+    .where(eq(productsTable.id, +id))
+    .returning();
+
+  console.log(product, "product");
 
   return c.json({
     success: true,
@@ -190,18 +194,44 @@ export const updateProduct = async (c: Context) => {
 export const deleteProduct = async (c: Context) => {
   const { id } = c.req.param();
 
-  await prisma.product.delete({ where: { id: +id } });
+  const result = await db.transaction(async (trx) => {
+    try {
+      await trx
+        .delete(badgesToProducts)
+        .where(eq(badgesToProducts.productId, +id));
 
-  return c.json({
-    success: true,
-    message: "Product deleted successfully.",
+      const deletedProduct = await trx
+        .delete(productsTable)
+        .where(eq(productsTable.id, +id))
+        .returning();
+
+      if (deletedProduct.length === 0) {
+        return c.json({
+          success: false,
+          message: "Product not found.",
+        });
+      }
+
+      return c.json({
+        success: true,
+        message: "Product deleted successfully.",
+      });
+    } catch (error) {
+      await trx.rollback();
+      return c.json({
+        success: false,
+        message: "Error occurred while deleting product.",
+      });
+    }
   });
+
+  return result;
 };
 
 export const seedProductsData = async (c: Context) => {
-  await prisma.product.deleteMany();
+  await db.delete(productsTable);
 
-  await prisma.product.createMany({ data: productsSeed });
+  await db.insert(productsTable).values(productsSeed);
 
   return c.json({
     success: true,

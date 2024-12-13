@@ -87,6 +87,22 @@ export const productsSeed: ProductWithoutId[] = [
     updatedAt: new Date(),
     weight: 4.61,
   },
+  {
+    createdAt: new Date(),
+    description: "",
+    discount: 29,
+    enName: "ریشه زعفران افراس - 4.608 گرم",
+    images: [
+      "https://res.cloudinary.com/dfflta8zl/image/upload/v1734087356/qURV27hZFu8vWi7fhIl3d.webp",
+    ],
+    point: 40,
+    price: 47500,
+    prName: "ریشه زعفران افراس - 4.608 گرم",
+    quantity: 0,
+    slug: "ریشه زعفران افراس - 4.608 گرم",
+    updatedAt: new Date(),
+    weight: 4.608,
+  },
 ];
 
 export const discount = [

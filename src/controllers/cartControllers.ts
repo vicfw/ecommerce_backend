@@ -5,31 +5,63 @@ import {
   calculatePriceAfterDiscount,
   calculateProfit,
 } from "../utils/calculateProfit";
+import { db } from "../db";
+import { productsTable } from "../db/schema/products";
+import { eq, getTableColumns, sql } from "drizzle-orm";
+import { cartsTable } from "../db/schema/carts";
+import { cartItemsTable } from "../db/schema/cartItems";
+import { cart } from ".";
 
 export const getCart = async (c: Context) => {
   const user = c.get("user");
 
-  const cart = await prisma.cart.findFirst({
-    where: { userId: user.id },
-    include: {
-      cartItems: {
-        select: {
-          quantity: true,
-          product: true,
-          itemPrice: true,
-          id: true,
-          productId: true,
-        },
-        orderBy: { id: "desc" },
-      },
-      deliveryCost: {
-        select: {
-          id: true,
-          cost: true,
-        },
-      },
-    },
-  });
+  // const cart = await prisma.cart.findFirst({
+  //   where: { userId: user.id },
+  //   include: {
+  //     cartItems: {
+  //       select: {
+  //         quantity: true,
+  //         product: true,
+  //         itemPrice: true,
+  //         id: true,
+  //         productId: true,
+  //       },
+  //       orderBy: { id: "desc" },
+  //     },
+  //     deliveryCost: {
+  //       select: {
+  //         id: true,
+  //         cost: true,
+  //       },
+  //     },
+  //   },
+  // });
+
+  const [cart] = await db
+    .select({
+      ...getTableColumns(cartsTable),
+      cartItems: sql<string>`
+      COALESCE(
+        JSON_AGG(
+          CASE WHEN ${cartItemsTable.id} IS NOT NULL
+          THEN JSON_BUILD_OBJECT(
+            'id',${cartItemsTable.id},
+            'quantity',${cartItemsTable.quantity},
+            'itemPrice',${cartItemsTable.itemPrice},
+            'product', JSON_BUILD_OBJECT(
+              'id',${productsTable.id}
+              )
+        )
+        ELSE NULL END
+      ) FILTER (WHERE ${cartItemsTable.id} IS NOT NULL),
+       '[]'
+    )
+      `.as("cartItems"),
+    })
+    .from(cartsTable)
+    .leftJoin(cartItemsTable, eq(cartItemsTable.cartId, cartsTable.id))
+    .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
+    .groupBy(cartsTable.id);
 
   return c.json({
     success: true,
@@ -70,7 +102,17 @@ export const createCart = async (c: Context) => {
   const user = c.get("user");
 
   // Check if the product exists and has a valid quantity
-  const product = await prisma.product.findFirst({ where: { id: +productId } });
+  const [product] = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.id, productId));
+
+  if (!product) {
+    throw new HTTPException(400, {
+      message: "Product not found",
+      cause: "product not found",
+    });
+  }
 
   if (!product?.quantity || product.quantity < 0) {
     throw new HTTPException(400, {
@@ -79,142 +121,172 @@ export const createCart = async (c: Context) => {
     });
   }
 
-  // Use a transaction to ensure atomicity and consistency
-  const cart = await prisma.$transaction(async (prisma) => {
-    const existingCart = await prisma.cart.findFirst({
-      where: { userId: user.id },
-    });
+  // const cart = await prisma.$transaction(async (prisma) => {
+  //   const existingCart = await prisma.cart.findFirst({
+  //     where: { userId: user.id },
+  //   });
 
-    if (!existingCart) {
-      // Create a new cart if it doesn't exist
-      return prisma.cart.create({
-        data: {
-          userId: user.id,
-          price: product.price,
-          discountPrice: calculatePriceAfterDiscount(
-            product.price,
-            product.discount
-          ),
-          profitFromDiscount: calculateProfit(product.price, product.discount),
-          totalDiscountPercentage: product.discount,
-          deliveryCostId,
-          cartItems: {
-            create: {
-              quantity: 1,
-              productId: +productId,
-              itemPrice: product.price,
-            },
-          },
-        },
-        select: {
-          createdAt: true,
-          updatedAt: true,
-          id: true,
-          price: true,
-          cartItems: {
-            select: {
-              product: true,
-              quantity: true,
-              itemPrice: true,
-              id: true,
-            },
-          },
-        },
+  //   if (!existingCart) {
+  //     // Create a new cart if it doesn't exist
+  //     return prisma.cart.create({
+  //       data: {
+  //         userId: user.id,
+  //         price: product.price,
+  //         discountPrice: calculatePriceAfterDiscount(
+  //           product.price,
+  //           product.discount || 0
+  //         ),
+  //         profitFromDiscount: product.discount
+  //           ? calculateProfit(product.price, product.discount)
+  //           : 0,
+  //         totalDiscountPercentage: product.discount || 0,
+  //         deliveryCostId,
+  //         cartItems: {
+  //           create: {
+  //             quantity: 1,
+  //             productId: +productId,
+  //             itemPrice: product.price,
+  //           },
+  //         },
+  //       },
+  //       select: {
+  //         createdAt: true,
+  //         updatedAt: true,
+  //         id: true,
+  //         price: true,
+  //         cartItems: {
+  //           select: {
+  //             product: true,
+  //             quantity: true,
+  //             itemPrice: true,
+  //             id: true,
+  //           },
+  //         },
+  //       },
+  //     });
+  //   }
+
+  //   const existingCartItem = await prisma.cartItem.findFirst({
+  //     where: { cartId: existingCart.id, productId: +productId },
+  //   });
+
+  //   let discountPrice = 0;
+  //   let profitFromDiscount = 0;
+
+  //   if (product.discount) {
+  //     discountPrice = await calculateDiscountPrice(
+  //       increment,
+  //       product.price,
+  //       product.discount,
+  //       existingCart.discountPrice
+  //     );
+
+  //     profitFromDiscount = await calculateProfitFromDiscount(
+  //       increment,
+  //       product.price,
+  //       product.discount,
+  //       existingCart.profitFromDiscount
+  //     );
+  //   }
+
+  //   if (existingCartItem) {
+  //     // Check if the cart item quantity exceeds the product quantity
+  //     const updatedQuantity = increment
+  //       ? existingCartItem.quantity + 1
+  //       : existingCartItem.quantity - 1;
+  //     const updatedItemPrice = increment
+  //       ? existingCartItem.itemPrice + product.price
+  //       : existingCartItem.itemPrice - product.price;
+
+  //     // Ensure the updated quantity does not exceed product quantity
+  //     if (updatedQuantity > product.quantity) {
+  //       throw new HTTPException(400, {
+  //         message: "Product quantity is not enough",
+  //         cause: "quantity limit",
+  //       });
+  //     }
+
+  //     // Update existing cart item
+  //     return prisma.cart.update({
+  //       where: { userId: user.id },
+  //       data: {
+  //         price: increment
+  //           ? existingCart.price + product.price
+  //           : existingCart.price - product.price,
+  //         discountPrice,
+  //         profitFromDiscount,
+  //         totalDiscountPercentage: product.discount || 0,
+  //         cartItems: {
+  //           updateMany: {
+  //             where: { productId: +productId },
+  //             data: { quantity: updatedQuantity, itemPrice: updatedItemPrice },
+  //           },
+  //         },
+  //       },
+  //       select: {
+  //         userId: true,
+  //         createdAt: true,
+  //         updatedAt: true,
+  //         id: true,
+  //         price: true,
+  //         cartItems: {
+  //           select: { product: true, quantity: true, id: true },
+  //         },
+  //       },
+  //     });
+  //   }
+
+  //   // Add new product to cart
+  //   return prisma.cart.update({
+  //     where: { userId: user.id },
+  //     data: {
+  //       price: existingCart.price + product.price,
+  //       discountPrice,
+  //       profitFromDiscount,
+  //       totalDiscountPercentage: product.discount || 0,
+  //       cartItems: {
+  //         create: {
+  //           productId: +productId,
+  //           quantity: 1,
+  //           itemPrice: product.price,
+  //         },
+  //       },
+  //     },
+  //     select: {
+  //       userId: true,
+  //       createdAt: true,
+  //       updatedAt: true,
+  //       id: true,
+  //       price: true,
+  //       cartItems: {
+  //         select: { id: true, product: true, quantity: true },
+  //       },
+  //     },
+  //   });
+  // });
+
+  const cart = await db.transaction(async (trx) => {
+    const existingCart = await trx
+      .select()
+      .from(cartsTable)
+      .where(eq(cartsTable.userId, user.id))
+      .limit(1);
+
+    if (!existingCart.length) {
+      const [createdCart] = await trx
+        .insert(cartsTable)
+        .values({ userId: user.id, price: product.price, deliveryCostId })
+        .returning();
+
+      await trx.insert(cartItemsTable).values({
+        cartId: createdCart.id,
+        productId: product.id,
+        quantity: 1,
+        itemPrice: product.price,
       });
+
+      return createdCart;
     }
-
-    const existingCartItem = await prisma.cartItem.findFirst({
-      where: { cartId: existingCart.id, productId: +productId },
-    });
-
-    const discountPrice = await calculateDiscountPrice(
-      increment,
-      product.price,
-      product.discount,
-      existingCart.discountPrice
-    );
-
-    const profitFromDiscount = await calculateProfitFromDiscount(
-      increment,
-      product.price,
-      product.discount,
-      existingCart.profitFromDiscount
-    );
-
-    if (existingCartItem) {
-      // Check if the cart item quantity exceeds the product quantity
-      const updatedQuantity = increment
-        ? existingCartItem.quantity + 1
-        : existingCartItem.quantity - 1;
-      const updatedItemPrice = increment
-        ? existingCartItem.itemPrice + product.price
-        : existingCartItem.itemPrice - product.price;
-
-      // Ensure the updated quantity does not exceed product quantity
-      if (updatedQuantity > product.quantity) {
-        throw new HTTPException(400, {
-          message: "Product quantity is not enough",
-          cause: "quantity limit",
-        });
-      }
-
-      // Update existing cart item
-      return prisma.cart.update({
-        where: { userId: user.id },
-        data: {
-          price: increment
-            ? existingCart.price + product.price
-            : existingCart.price - product.price,
-          discountPrice,
-          profitFromDiscount,
-          totalDiscountPercentage: product.discount,
-          cartItems: {
-            updateMany: {
-              where: { productId: +productId },
-              data: { quantity: updatedQuantity, itemPrice: updatedItemPrice },
-            },
-          },
-        },
-        select: {
-          userId: true,
-          createdAt: true,
-          updatedAt: true,
-          id: true,
-          price: true,
-          cartItems: {
-            select: { product: true, quantity: true, id: true },
-          },
-        },
-      });
-    }
-
-    // Add new product to cart
-    return prisma.cart.update({
-      where: { userId: user.id },
-      data: {
-        price: existingCart.price + product.price,
-        discountPrice,
-        profitFromDiscount,
-        totalDiscountPercentage: product.discount,
-        cartItems: {
-          create: {
-            productId: +productId,
-            quantity: 1,
-            itemPrice: product.price,
-          },
-        },
-      },
-      select: {
-        userId: true,
-        createdAt: true,
-        updatedAt: true,
-        id: true,
-        price: true,
-        cartItems: {
-          select: { id: true, product: true, quantity: true },
-        },
-      },
-    });
   });
 
   return c.json({

@@ -1,7 +1,6 @@
 import { asc, eq, getTableColumns, sql } from "drizzle-orm";
 import { Context } from "hono";
 import { productsSeed } from "../../prisma/data";
-import { prisma } from "../config/prismaClient";
 import { db } from "../db";
 import { badgesTable } from "../db/schema/badges";
 import { badgesToProducts } from "../db/schema/badgesToProducts";
@@ -55,7 +54,7 @@ export const getProducts = async (c: Context) => {
 export const getProduct = async (c: Context) => {
   const { slug } = c.req.param();
 
-  const product = await db
+  const [product] = await db
     .select({
       ...getTableColumns(productsTable),
       badges: sql<string>`

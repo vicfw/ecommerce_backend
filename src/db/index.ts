@@ -6,6 +6,8 @@ import * as addressSchema from "./schema/addresses";
 import * as productsSchema from "./schema/products";
 import * as badgesSchema from "./schema/badges";
 import * as badgesToProductsSchema from "./schema/badgesToProducts";
+import * as cartSchema from "./schema/carts";
+import * as cartItemsSchema from "./schema/cartItems";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL_DRIZZLE,
@@ -19,5 +21,7 @@ export const db = drizzle({
     ...productsSchema,
     ...badgesSchema,
     ...badgesToProductsSchema,
+    ...cartSchema,
+    ...cartItemsSchema,
   },
 });

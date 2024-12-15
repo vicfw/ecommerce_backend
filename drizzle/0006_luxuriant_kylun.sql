@@ -1,0 +1,1 @@
+ALTER TABLE "anonCarts" ADD PRIMARY KEY ("id");

@@ -54,7 +54,7 @@ export const cartSchema = z.object({
 export const anonCartSchema = z.object({
   increment: z.boolean(),
   productId: z.number(),
-  uuid: z.string().optional(),
+  anonCartId: z.string().optional(),
 });
 
 export const anonCartMatchSchema = z.object({

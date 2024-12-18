@@ -181,8 +181,6 @@ export const updateProduct = async (c: Context) => {
     .where(eq(productsTable.id, +id))
     .returning();
 
-  console.log(product, "product");
-
   return c.json({
     success: true,
     data: product,

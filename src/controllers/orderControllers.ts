@@ -14,8 +14,6 @@ export const createOrder = async (c: Context) => {
     },
   });
 
-  console.log(cart, "cart");
-
   const defaultAddress = await prisma.address.findFirst({
     where: { userId: user.id, isDefault: true },
   });

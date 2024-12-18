@@ -1,8 +1,8 @@
-import { and, desc, eq, getTableColumns, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, sql } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { prisma } from "../config/prismaClient";
 import { db } from "../db";
+import { anonCartsTable } from "../db/schema/anonCarts";
 import { cartItemsTable } from "../db/schema/cartItems";
 import { cartsTable } from "../db/schema/carts";
 import { productsTable } from "../db/schema/products";
@@ -10,7 +10,7 @@ import {
   calculatePriceAfterDiscount,
   calculateProfit,
 } from "../utils/calculateProfit";
-import { anonCartsTable } from "../db/schema/anonCarts";
+import { deliveryCostsTable } from "../db/schema/deliveryCosts";
 
 export const getCart = async (c: Context) => {
   const user = c.get("user");
@@ -269,18 +269,24 @@ export const createAnonCart = async (c: Context) => {
         .limit(1);
 
       if (existingCartItem) {
-        // Update existing cart item
-        await trx
-          .update(cartItemsTable)
-          .set({
-            quantity: increment
-              ? sql`${cartItemsTable.quantity} + 1`
-              : sql`${cartItemsTable.quantity} - 1`,
-            itemPrice: increment
-              ? sql`${cartItemsTable.itemPrice} + ${product.price}`
-              : sql`${cartItemsTable.itemPrice} - ${product.price}`,
-          })
-          .where(eq(cartItemsTable.id, existingCartItem.id));
+        if (existingCartItem.quantity === 1 && !increment) {
+          await trx
+            .delete(cartItemsTable)
+            .where(eq(cartItemsTable.id, existingCartItem.id));
+        } else {
+          // Update existing cart item
+          await trx
+            .update(cartItemsTable)
+            .set({
+              quantity: increment
+                ? sql`${cartItemsTable.quantity} + 1`
+                : sql`${cartItemsTable.quantity} - 1`,
+              itemPrice: increment
+                ? sql`${cartItemsTable.itemPrice} + ${product.price}`
+                : sql`${cartItemsTable.itemPrice} - ${product.price}`,
+            })
+            .where(eq(cartItemsTable.id, existingCartItem.id));
+        }
       } else {
         // Add new cart item
         await trx.insert(cartItemsTable).values({
@@ -306,7 +312,7 @@ export const createAnonCart = async (c: Context) => {
       );
 
       await trx
-        .update(cartsTable)
+        .update(anonCartsTable)
         .set({
           price: increment
             ? cart.price + product.price
@@ -315,7 +321,7 @@ export const createAnonCart = async (c: Context) => {
           profitFromDiscount,
           totalDiscountPercentage: product.discount || 0,
         })
-        .where(eq(cartsTable.id, cart.id))
+        .where(eq(anonCartsTable.id, cart.id))
         .returning();
 
       return await anonCartGetter(trx, +anoncartid);
@@ -487,53 +493,69 @@ export const deleteAnonCartItem = async (c: Context) => {
 };
 
 export const matchAnonCart = async (c: Context) => {
-  const { uuid } = await c.req.header();
+  const { anoncartid } = await c.req.header();
   const { userId } = await c.req.json();
 
-  const anonCart = await prisma.anonCart.findUnique({
-    where: { id: uuid },
-    include: { cartItems: true },
-  });
+  const result = await db.transaction(async (trx) => {
+    const anonCart = await anonCartGetter(db, +anoncartid);
 
-  if (!anonCart) {
-    return;
-  }
+    if (!anonCart) {
+      throw new HTTPException(400, {
+        message:
+          "The system was unable to locate a cart for the specified anoncartid",
+      });
+    }
 
-  const isCartExist = await prisma.cart.findUnique({ where: { userId } });
+    const isCartExist = await db.query.cartsTable.findFirst({
+      where: eq(cartsTable.userId, userId),
+    });
 
-  if (isCartExist) {
-    await prisma.cart.delete({ where: { userId } });
-  }
+    if (isCartExist) {
+      await db.delete(cartsTable).where(eq(cartsTable.userId, userId));
+    }
 
-  const mappedCartItems = anonCart.cartItems.map((cartItem) => ({
-    productId: cartItem.productId,
-    quantity: cartItem.quantity,
-    itemPrice: cartItem.itemPrice,
-  }));
+    const [cart] = await db
+      .insert(cartsTable)
+      .values({
+        userId,
+        price: anonCart.price,
+        profitFromDiscount: anonCart.profitFromDiscount,
+        totalDiscountPercentage: anonCart.totalDiscountPercentage,
+        discountPrice: anonCart.discountPrice,
+        deliveryCostId: anonCart.deliveryCostId,
+      })
+      .returning();
 
-  const cart = await prisma.cart.create({
-    data: {
-      cartItems: {
-        createMany: {
-          data: mappedCartItems,
-        },
-      },
-      price: anonCart?.price,
-      profitFromDiscount: anonCart?.profitFromDiscount,
-      deliveryCostId: anonCart.deliveryCostId,
-      discountPrice: anonCart.discountPrice,
-      totalDiscountPercentage: anonCart.totalDiscountPercentage,
-      userId: userId,
-    },
+    if (Array.isArray(anonCart.cartItems)) {
+      anonCart.cartItems.forEach(async (item) => {
+        await db.insert(cartItemsTable).values({
+          cartId: cart.id,
+          productId: item.productId,
+          quantity: item.quantity,
+          itemPrice: item.itemPrice,
+        });
+      });
+    }
+
+    await db.delete(anonCartsTable).where(eq(anonCartsTable.id, +anoncartid));
+
+    if (Array.isArray(anonCart.cartItems)) {
+      anonCart.cartItems.forEach(async (item) => {
+        await db.delete(cartItemsTable).where(eq(cartItemsTable.id, item.id));
+      });
+    }
+
+    const cartQuery = await cartGetter(trx, cart.id);
+
+    return cartQuery;
   });
 
   return c.json({
     success: true,
-    data: cart,
+    data: result,
     message: "Cart replaced successfully",
   });
 };
-
 //  TODO : Convert This functions to raw sql (database side)
 
 const calculateDiscountPrice = async (
@@ -545,8 +567,6 @@ const calculateDiscountPrice = async (
   const discountPriceResult = await db.execute<{ discount_price: string }>(
     sql`SELECT calculate_discount_price(${productPrice}, ${productDiscount}) AS discount_price`
   );
-
-  console.log(discountPriceResult, "discountPriceResult");
 
   const calculatedDiscountPrice = parseFloat(
     discountPriceResult.rows[0].discount_price
@@ -587,6 +607,20 @@ const cartGetter = async <
   const [cart] = await trx
     .select({
       ...getTableColumns(cartsTable),
+      deliveryCost: sql`
+      COALESCE(
+        (SELECT 
+          JSONB_BUILD_OBJECT(
+            'id', ${deliveryCostsTable.id},
+            'cost', ${deliveryCostsTable.cost}
+          )
+        FROM ${deliveryCostsTable}
+        WHERE ${deliveryCostsTable.id} IS NOT NULL AND ${deliveryCostsTable.id} = ${cartsTable.deliveryCostId}
+        ORDER BY ${deliveryCostsTable.createdAt} DESC
+        LIMIT 1),
+        '{}'::jsonb
+      )
+    `.as("deliveryCost"),
       cartItems: sql<string>`
   COALESCE(
     JSON_AGG(
@@ -614,13 +648,17 @@ const cartGetter = async <
       )
       ELSE NULL END
       ORDER BY ${cartItemsTable.id} DESC
-    ) FILTER (WHERE ${cartItemsTable.id} IS NOT NULL),
+    ) FILTER (WHERE ${cartItemsTable.id} IS NOT NULL AND ${cartItemsTable.quantity} > 0),
     '[]'
   )
   `.as("cartItems"),
     })
     .from(cartsTable)
     .where(eq(cartsTable.userId, userId))
+    .leftJoin(
+      deliveryCostsTable,
+      eq(deliveryCostsTable.id, cartsTable.deliveryCostId)
+    )
     .leftJoin(cartItemsTable, eq(cartItemsTable.cartId, cartsTable.id))
     .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
     .groupBy(cartsTable.id);
@@ -664,7 +702,7 @@ const anonCartGetter = async <
       )
       ELSE NULL END
       ORDER BY ${cartItemsTable.id} DESC
-    ) FILTER (WHERE ${cartItemsTable.id} IS NOT NULL),
+    ) FILTER (WHERE ${cartItemsTable.id} IS NOT NULL AND ${cartItemsTable.quantity} > 0),
     '[]'
   )
   `.as("cartItems"),

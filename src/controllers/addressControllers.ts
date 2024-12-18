@@ -10,8 +10,6 @@ export const getAddress = async (c: Context) => {
     where: eq(addressesTable.userId, user.id),
   });
 
-  console.log(address, "address");
-
   return c.json({
     success: true,
     data: address,

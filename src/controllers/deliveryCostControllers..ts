@@ -1,10 +1,17 @@
+import { desc } from "drizzle-orm";
 import { Context } from "hono";
-import { prisma } from "../config/prismaClient";
+import { db } from "../db";
+import { deliveryCostsTable } from "../db/schema/deliveryCosts";
 
 export const createDeliveryCost = async (c: Context) => {
   const { cost } = await c.req.json();
 
-  const deliveryCost = await prisma.deliveryCost.create({ data: { cost } });
+  const deliveryCost = await db
+    .insert(deliveryCostsTable)
+    .values({
+      cost,
+    })
+    .returning();
 
   return c.json({
     success: true,
@@ -14,15 +21,15 @@ export const createDeliveryCost = async (c: Context) => {
 };
 
 export const getDeliveryCost = async (c: Context) => {
-  const deliveryCost = await prisma.deliveryCost.findFirst({
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+  const deliveryCost = await db
+    .select()
+    .from(deliveryCostsTable)
+    .orderBy(desc(deliveryCostsTable.createdAt))
+    .limit(1);
 
   return c.json({
     success: true,
     data: deliveryCost,
-    message: "deliveryCost created successfully",
+    message: "deliveryCost retrieved successfully",
   });
 };

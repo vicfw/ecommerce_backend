@@ -1,6 +1,8 @@
+import { eq } from "drizzle-orm";
 import { Context } from "hono";
-import { prisma } from "../config/prismaClient";
 import { HTTPException } from "hono/http-exception";
+import { db } from "../db";
+import { ordersTable } from "../db/schema/orders";
 
 export const paymentRequest = async (c: Context) => {
   const body = await c.req.json();
@@ -41,14 +43,11 @@ export const verifyPayment = async (c: Context) => {
   const verificationData = await response.json();
 
   if (verificationData.result === 100 || verificationData.result === 201) {
-    const updatedOrder = await prisma.order.update({
-      where: {
-        id: parseInt(verificationData.orderId),
-      },
-      data: {
-        status: "PROCESSING",
-      },
-    });
+    const [updatedOrder] = await db
+      .update(ordersTable)
+      .set({ status: "PROCESSING" })
+      .where(eq(ordersTable.id, parseInt(verificationData.orderId)))
+      .returning();
 
     if (!updatedOrder) {
       throw new HTTPException(500, {

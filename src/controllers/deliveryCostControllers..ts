@@ -21,7 +21,7 @@ export const createDeliveryCost = async (c: Context) => {
 };
 
 export const getDeliveryCost = async (c: Context) => {
-  const deliveryCost = await db
+  const [deliveryCost] = await db
     .select()
     .from(deliveryCostsTable)
     .orderBy(desc(deliveryCostsTable.createdAt))

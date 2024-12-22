@@ -1,4 +1,11 @@
-import { and, eq, getTableColumns, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  getTableColumns,
+  InferModel,
+  InferSelectModel,
+  sql,
+} from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../db";
@@ -526,16 +533,14 @@ export const matchAnonCart = async (c: Context) => {
       })
       .returning();
 
-    if (Array.isArray(anonCart.cartItems)) {
-      anonCart.cartItems.forEach(async (item) => {
-        await db.insert(cartItemsTable).values({
-          cartId: cart.id,
-          productId: item.productId,
-          quantity: item.quantity,
-          itemPrice: item.itemPrice,
-        });
+    anonCart.cartItems.forEach(async (item) => {
+      await db.insert(cartItemsTable).values({
+        cartId: cart.id,
+        productId: item.productId,
+        quantity: item.quantity,
+        itemPrice: item.itemPrice,
       });
-    }
+    });
 
     await db.delete(anonCartsTable).where(eq(anonCartsTable.id, +anoncartid));
 
@@ -598,7 +603,7 @@ const calculateProfitFromDiscount = async (
   return finalProfitFromDiscount;
 };
 
-const cartGetter = async <
+export const cartGetter = async <
   T extends Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db
 >(
   trx: T,
@@ -607,7 +612,7 @@ const cartGetter = async <
   const [cart] = await trx
     .select({
       ...getTableColumns(cartsTable),
-      deliveryCost: sql`
+      deliveryCost: sql<InferSelectModel<typeof deliveryCostsTable>>`
       COALESCE(
         (SELECT 
           JSONB_BUILD_OBJECT(
@@ -621,7 +626,7 @@ const cartGetter = async <
         '{}'::jsonb
       )
     `.as("deliveryCost"),
-      cartItems: sql<string>`
+      cartItems: sql<InferSelectModel<typeof cartItemsTable>[]>`
   COALESCE(
     JSON_AGG(
       CASE WHEN ${cartItemsTable.id} IS NOT NULL
@@ -675,7 +680,21 @@ const anonCartGetter = async <
   const [cart] = await trx
     .select({
       ...getTableColumns(anonCartsTable),
-      cartItems: sql<string>`
+      deliveryCost: sql<InferSelectModel<typeof deliveryCostsTable>>`
+      COALESCE(
+        (SELECT 
+          JSONB_BUILD_OBJECT(
+            'id', ${deliveryCostsTable.id},
+            'cost', ${deliveryCostsTable.cost}
+          )
+        FROM ${deliveryCostsTable}
+        WHERE ${deliveryCostsTable.id} IS NOT NULL AND ${deliveryCostsTable.id} = ${cartsTable.deliveryCostId}
+        ORDER BY ${deliveryCostsTable.createdAt} DESC
+        LIMIT 1),
+        '{}'::jsonb
+      )
+    `.as("deliveryCost"),
+      cartItems: sql<InferSelectModel<typeof cartItemsTable>[]>`
   COALESCE(
     JSON_AGG(
       CASE WHEN ${cartItemsTable.id} IS NOT NULL

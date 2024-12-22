@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { integer, pgTable, real, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, pgTable, real, timestamp } from "drizzle-orm/pg-core";
 import { cartItemsTable } from "./cartItems";
 import { deliveryCostsTable } from "./deliveryCosts";
 
@@ -8,7 +8,7 @@ export const anonCartsTable = pgTable("anonCarts", {
   price: real("price").notNull(),
   profitFromDiscount: integer("profit_from_discount").default(0),
   totalDiscountPercentage: integer("total_discount_percentage").default(0),
-  discountPrice: integer("discount_price").default(0),
+  discountPrice: real("discount_price").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   deliveryCostId: integer("delivery_cost_id").notNull(),

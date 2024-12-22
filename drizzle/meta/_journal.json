@@ -57,6 +57,13 @@
       "when": 1734259746251,
       "tag": "0007_complete_darwin",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1734514069911,
+      "tag": "0008_peaceful_nemesis",
+      "breakpoints": true
     }
   ]
 }

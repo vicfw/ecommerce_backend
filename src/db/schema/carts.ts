@@ -7,9 +7,9 @@ import { usersTable } from "./users";
 export const cartsTable = pgTable("carts", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   price: real("price").notNull(),
-  profitFromDiscount: integer("profit_from_discount").default(0),
+  profitFromDiscount: real("profit_from_discount").default(0),
   totalDiscountPercentage: integer("total_discount_percentage").default(0),
-  discountPrice: integer("discount_price").default(0),
+  discountPrice: real("discount_price").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 

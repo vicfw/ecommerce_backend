@@ -11,7 +11,7 @@ import { addressesTable } from "./addresses";
 import { usersTable } from "./users";
 import { orderItemsTable } from "./orderItems";
 
-const status = pgEnum("status", [
+export const statusEnum = pgEnum("status", [
   "pending",
   "processing",
   "shipped",
@@ -26,7 +26,7 @@ export const ordersTable = pgTable("orders", {
   addressId: integer("address_id").notNull(),
   totalAmount: integer("total_amount").notNull(),
   profitFromDiscount: real("profit_from_discount").default(0),
-  status: varchar("status").default(status.enumValues[1]),
+  status: varchar("status").default(statusEnum.enumValues[1]),
   deliveryAmount: integer("delivery_amount").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

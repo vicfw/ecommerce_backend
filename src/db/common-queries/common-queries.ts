@@ -42,7 +42,7 @@ export const joinUserQuery = () => {
   return sql<InferSelectModel<typeof usersTable>>`
       COALESCE(
              (SELECT 
-               JSONB_BUILD_OBJECT(
+              JSON_BUILD_OBJECT(
                  'id', ${usersTable.id},
                  'phoneNumber',${usersTable.phoneNumber},
                  'name',${usersTable.name},
@@ -52,7 +52,7 @@ export const joinUserQuery = () => {
              FROM ${usersTable}
              WHERE ${usersTable.id} IS NOT NULL
              LIMIT 1),
-             '{}'::jsonb
+             '{}'
            )
          `.as("user");
 };
@@ -60,27 +60,27 @@ export const joinUserQuery = () => {
 export const joinAddressQuery = () => {
   return sql<InferSelectModel<typeof addressesTable>>`
   COALESCE(
-    JSON_AGG(
-      CASE WHEN ${addressesTable.id} IS NOT NULL
-      THEN JSON_BUILD_OBJECT(
-        'id', ${addressesTable.id},
-        'address', ${addressesTable.address},
-        'city', ${addressesTable.city},
-        'floor', ${addressesTable.floor},
-        'isDefault', ${addressesTable.isDefault},
-        'plate', ${addressesTable.plate},
-        'province', ${addressesTable.province},
-        'receiverLastName', ${addressesTable.receiverLastName},
-        'receiverPhoneNumber', ${addressesTable.receiverPhoneNumber},
-        'street', ${addressesTable.street},
-        'updatedAt', ${addressesTable.updatedAt},
-        'createdAt', ${addressesTable.createdAt},
-        'zipCode', ${addressesTable.zipCode}
-      )
-      ELSE NULL END
-      ORDER BY ${addressesTable.id} DESC
-    ) FILTER (WHERE ${addressesTable.id} IS NOT NULL),
-    '[]'
+    (
+      SELECT
+        JSON_BUILD_OBJECT(
+          'id', ${addressesTable.id},
+         'address', ${addressesTable.address},
+         'city', ${addressesTable.city},
+         'floor', ${addressesTable.floor},
+         'isDefault', ${addressesTable.isDefault},
+         'plate', ${addressesTable.plate},
+         'province', ${addressesTable.province},
+         'receiverLastName', ${addressesTable.receiverLastName},
+         'receiverPhoneNumber', ${addressesTable.receiverPhoneNumber},
+         'street', ${addressesTable.street},
+         'updatedAt', ${addressesTable.updatedAt},
+         'createdAt', ${addressesTable.createdAt},
+         'zipCode', ${addressesTable.zipCode}
+        )
+        FROM ${addressesTable}
+        WHERE ${addressesTable.id} IS NOT NULL
+        LIMIT 1),
+        '{}'
   )
   `.as("address");
 };

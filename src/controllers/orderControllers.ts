@@ -1,5 +1,5 @@
 import { OrderStatus } from "@prisma/client";
-import { and, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { prisma } from "../config/prismaClient";
@@ -12,7 +12,7 @@ import {
 import { addressesTable } from "../db/schema/addresses";
 import { cartsTable } from "../db/schema/carts";
 import { orderItemsTable } from "../db/schema/orderItems";
-import { ordersTable } from "../db/schema/orders";
+import { ordersTable, statusEnum } from "../db/schema/orders";
 import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
 import { cartGetter } from "./cartControllers";
@@ -107,28 +107,33 @@ export const getOrder = async (c: Context) => {
 };
 
 export const getOrders = async (c: Context) => {
-  const status = c.req.query("status") as OrderStatus | undefined;
+  const status = c.req.query("status");
   const user = c.get("user");
 
-  const order = await prisma.order.findMany({
-    where: {
-      userId: user.id,
-      ...(status ? { status } : undefined),
-    },
-    select: {
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-      id: true,
-      totalAmount: true,
-      profitFromDiscount: true,
-      orderItem: { select: { product: true } },
-    },
-  });
+  const orders = await db
+    .select({
+      id: ordersTable.id,
+      status: ordersTable.status,
+      createdAt: ordersTable.createdAt,
+      updatedAt: ordersTable.updatedAt,
+      totalAmount: ordersTable.totalAmount,
+      profitFromDiscount: ordersTable.profitFromDiscount,
+      orderItem: joinOrderItemQuery(),
+    })
+    .from(ordersTable)
+    .where(
+      and(
+        eq(ordersTable.userId, user.id),
+        eq(ordersTable.status, status || ordersTable.status)
+      )
+    )
+    .leftJoin(orderItemsTable, eq(orderItemsTable.orderId, ordersTable.id))
+    .leftJoin(productsTable, eq(orderItemsTable.productId, productsTable.id))
+    .groupBy(ordersTable.id);
 
   return c.json({
     success: true,
-    data: order,
+    data: orders,
     message: "Order retrieved successfully",
   });
 };
@@ -136,15 +141,14 @@ export const getOrders = async (c: Context) => {
 export const getStatusCount = async (c: Context) => {
   const user = c.get("user");
 
-  const status = await prisma.order.groupBy({
-    by: ["status"],
-    where: {
-      userId: user.id,
-    },
-    _count: {
-      status: true,
-    },
-  });
+  const status = await db
+    .select({
+      status: ordersTable.status,
+      count: count(ordersTable.status),
+    })
+    .from(ordersTable)
+    .where(eq(ordersTable.userId, user.id))
+    .groupBy(ordersTable.status);
 
   return c.json({
     success: true,

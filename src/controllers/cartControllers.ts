@@ -209,6 +209,9 @@ export const getAnonCart = async (c: Context) => {
 
 export const createAnonCart = async (c: Context) => {
   const { anoncartid = 0 } = await c.req.header();
+
+  console.log(anoncartid, "anoncartid");
+
   const { productId, increment = true, deliveryCostId } = await c.req.json();
 
   // Check if the product exists and has a valid quantity
@@ -231,14 +234,14 @@ export const createAnonCart = async (c: Context) => {
     });
   }
 
-  const cart = await db.transaction(async (trx) => {
-    const [cart] = await trx
+  const anonCart = await db.transaction(async (trx) => {
+    const [anonCart] = await trx
       .select()
       .from(anonCartsTable)
       .where(eq(anonCartsTable.id, +anoncartid))
       .limit(1);
 
-    if (!cart) {
+    if (!anonCart) {
       const [createdCart] = await trx
         .insert(anonCartsTable)
         .values({
@@ -269,7 +272,7 @@ export const createAnonCart = async (c: Context) => {
         .from(cartItemsTable)
         .where(
           and(
-            eq(cartItemsTable.cartId, cart.id),
+            eq(cartItemsTable.cartId, anonCart.id),
             eq(cartItemsTable.productId, product.id)
           )
         )
@@ -297,7 +300,7 @@ export const createAnonCart = async (c: Context) => {
       } else {
         // Add new cart item
         await trx.insert(cartItemsTable).values({
-          cartId: cart.id,
+          cartId: anonCart.id,
           productId: product.id,
           quantity: 1,
           itemPrice: product.price,
@@ -308,27 +311,27 @@ export const createAnonCart = async (c: Context) => {
         increment,
         product.price,
         product.discount || 0,
-        cart.discountPrice || 0
+        anonCart.discountPrice || 0
       );
 
       const profitFromDiscount = await calculateProfitFromDiscount(
         increment,
         product.price,
         product.discount || 0,
-        cart.profitFromDiscount || 0
+        anonCart.profitFromDiscount || 0
       );
 
       await trx
         .update(anonCartsTable)
         .set({
           price: increment
-            ? cart.price + product.price
-            : cart.price - product.price,
+            ? anonCart.price + product.price
+            : anonCart.price - product.price,
           discountPrice,
           profitFromDiscount,
           totalDiscountPercentage: product.discount || 0,
         })
-        .where(eq(anonCartsTable.id, cart.id))
+        .where(eq(anonCartsTable.id, anonCart.id))
         .returning();
 
       return await anonCartGetter(trx, +anoncartid);
@@ -337,8 +340,8 @@ export const createAnonCart = async (c: Context) => {
 
   return c.json({
     success: true,
-    data: cart,
-    message: `Cart ${cart ? "updated" : "created"} successfully`,
+    data: anonCart,
+    message: `Cart ${anonCart ? "updated" : "created"} successfully`,
   });
 };
 
@@ -688,7 +691,7 @@ const anonCartGetter = async <
             'cost', ${deliveryCostsTable.cost}
           )
         FROM ${deliveryCostsTable}
-        WHERE ${deliveryCostsTable.id} IS NOT NULL AND ${deliveryCostsTable.id} = ${cartsTable.deliveryCostId}
+        WHERE ${deliveryCostsTable.id} IS NOT NULL AND ${deliveryCostsTable.id} = ${anonCartsTable.deliveryCostId}
         ORDER BY ${deliveryCostsTable.createdAt} DESC
         LIMIT 1),
         '{}'::jsonb

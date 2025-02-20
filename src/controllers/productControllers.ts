@@ -36,6 +36,11 @@ export const getProducts = async (c: Context) => {
       eq(productsTable.id, badgesToProducts.productId)
     )
     .leftJoin(badgesTable, eq(badgesToProducts.badgeId, badgesTable.id))
+    .where(
+      query.categoryId
+        ? eq(productsTable.categoryId, +query.categoryId)
+        : undefined
+    )
     .groupBy(productsTable.id)
     .limit(pagination.limit)
     .offset(pagination.skip)
@@ -98,6 +103,7 @@ export const createProduct = async (c: Context) => {
     badges,
     weight,
     discount,
+    categoryId,
   } = await c.req.json();
 
   const product = await db.transaction(async (tx) => {
@@ -113,6 +119,7 @@ export const createProduct = async (c: Context) => {
         images,
         weight,
         discount,
+        categoryId,
       })
       .returning();
 
@@ -228,7 +235,7 @@ export const deleteProduct = async (c: Context) => {
 export const seedProductsData = async (c: Context) => {
   await db.delete(productsTable);
 
-  await db.insert(productsTable).values(productsSeed);
+  await db.insert(productsTable).values(productsSeed as any);
 
   return c.json({
     success: true,

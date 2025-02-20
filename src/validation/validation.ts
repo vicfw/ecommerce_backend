@@ -18,7 +18,7 @@ export const addressSchemaPartial = addressSchema.partial();
 
 export const categorySchema = z.object({
   name: z.string(),
-  parentId: z.number().optional(),
+  image: z.string(),
 });
 
 export const colorsSchema = z.object({

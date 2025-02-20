@@ -8,6 +8,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { badgesToProducts } from "./badgesToProducts";
+import { categoriesTable } from "./categories";
 
 export const productsTable = pgTable("products", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -21,10 +22,15 @@ export const productsTable = pgTable("products", {
   quantity: integer("quantity").notNull(),
   images: text("images").array(),
   point: integer("point").default(0),
+  categoryId: integer().notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const productsRelations = relations(productsTable, ({ many }) => ({
+export const productsRelations = relations(productsTable, ({ many, one }) => ({
   badgesToProducts: many(badgesToProducts),
+  category: one(categoriesTable, {
+    fields: [productsTable.categoryId],
+    references: [categoriesTable.id],
+  }),
 }));

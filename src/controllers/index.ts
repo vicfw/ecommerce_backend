@@ -8,3 +8,4 @@ export * as cart from "./cartControllers";
 export * as order from "./orderControllers";
 export * as deliveryCost from "./deliveryCostControllers.";
 export * as payment from "./paymentControllers";
+export * as brand from "./brandControllers";

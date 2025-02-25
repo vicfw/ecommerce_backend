@@ -8,3 +8,4 @@ export { default as cartRoutes } from "./cartRoutes";
 export { default as orderRoutes } from "./orderRoutes";
 export { default as deliveryCostRoutes } from "./deliveryCostRoutes";
 export { default as paymentRoutes } from "./paymentRoutes";
+export { default as brandRoutes } from "./brandRoutes";

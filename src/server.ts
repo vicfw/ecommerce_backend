@@ -14,6 +14,7 @@ import {
   uploadRoutes,
   deliveryCostRoutes,
   paymentRoutes,
+  brandRoutes,
 } from "./routes";
 import { v2 as cloudinary } from "cloudinary";
 import { limiter } from "./middlewares/rateLimitMiddleware";
@@ -38,6 +39,7 @@ app.use("*", limiter);
 app.route("/users", userRoutes);
 app.route("/address", addressRoutes);
 app.route("/category", categoryRoutes);
+app.route("/brand", brandRoutes);
 app.route("/product", productRoutes);
 app.route("/order", orderRoutes);
 app.route("/upload", uploadRoutes);

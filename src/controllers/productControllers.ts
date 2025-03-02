@@ -7,14 +7,31 @@ import { badgesToProducts } from "../db/schema/badgesToProducts";
 import { productsTable } from "../db/schema/products";
 import { ProductTypes } from "../types";
 import { builderFunc } from "../utils";
+import { colorImagesTable } from "../db/schema/colorImage";
 
 export const getProducts = async (c: Context) => {
+  console.log("plp fetched");
+
   const query: ProductTypes.ProductQueryStringType = c.req.query();
   const pagination = builderFunc.paginationBuilder(query);
 
   const products = await db
     .select({
       ...getTableColumns(productsTable),
+      colorImage: sql<string>`
+       COALESCE(
+       JSON_AGG(
+        CASE WHEN ${colorImagesTable.id} IS NOT NULL 
+        THEN JSON_BUILD_OBJECT(
+          'id', ${colorImagesTable.id},
+          'images', ${colorImagesTable.images},
+          'colorImage', ${colorImagesTable.colorImage}  
+        )
+        ELSE NULL END
+      ) FILTER (WHERE ${colorImagesTable.id} IS NOT NULL),
+      'null'
+    )
+      `.as("colorImage"),
       badges: sql<string>`
     COALESCE(
       JSON_AGG(
@@ -36,6 +53,10 @@ export const getProducts = async (c: Context) => {
       eq(productsTable.id, badgesToProducts.productId)
     )
     .leftJoin(badgesTable, eq(badgesToProducts.badgeId, badgesTable.id))
+    .leftJoin(
+      colorImagesTable,
+      eq(colorImagesTable.productId, productsTable.id)
+    )
     .where(
       query.categoryId
         ? eq(productsTable.categoryId, +query.categoryId)
@@ -58,6 +79,8 @@ export const getProducts = async (c: Context) => {
 };
 export const getProduct = async (c: Context) => {
   const { slug } = c.req.param();
+
+  console.log("pdp fetched");
 
   const [product] = await db
     .select({

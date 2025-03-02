@@ -9,3 +9,4 @@ export { default as orderRoutes } from "./orderRoutes";
 export { default as deliveryCostRoutes } from "./deliveryCostRoutes";
 export { default as paymentRoutes } from "./paymentRoutes";
 export { default as brandRoutes } from "./brandRoutes";
+export { default as colorImageRoutes } from "./colorImageRoutes";

@@ -1,23 +1,24 @@
+import { v2 as cloudinary } from "cloudinary";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
 import { errorHandler, notFound } from "./middlewares";
+import { limiter } from "./middlewares/rateLimitMiddleware";
 import {
-  userRoutes,
   addressRoutes,
   badgesRoutes,
+  brandRoutes,
   cartRoutes,
   categoryRoutes,
+  colorImageRoutes,
+  deliveryCostRoutes,
   orderRoutes,
+  paymentRoutes,
   productRoutes,
   uploadRoutes,
-  deliveryCostRoutes,
-  paymentRoutes,
-  brandRoutes,
+  userRoutes,
 } from "./routes";
-import { v2 as cloudinary } from "cloudinary";
-import { limiter } from "./middlewares/rateLimitMiddleware";
 
 const app = new Hono().basePath("/api/v1");
 
@@ -47,6 +48,7 @@ app.route("/badge", badgesRoutes);
 app.route("/cart", cartRoutes);
 app.route("/deliveryCost", deliveryCostRoutes);
 app.route("/payment", paymentRoutes);
+app.route("/colorImage", colorImageRoutes);
 
 cloudinary.config({
   cloud_name: Bun.env.CLOUDINARY_CLOUD_NAME,

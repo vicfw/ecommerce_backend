@@ -24,7 +24,7 @@ export const productsTable = pgTable("products", {
   images: text("images").array(),
   point: integer("point").default(0),
   categoryId: integer().notNull(),
-  brandId: integer().notNull().default(1),
+  brandId: integer(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

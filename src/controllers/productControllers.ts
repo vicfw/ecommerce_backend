@@ -99,6 +99,20 @@ export const getProduct = async (c: Context) => {
       '[]'
     )
   `.as("badges"),
+      colorImage: sql<string>`
+    COALESCE(
+    JSON_AGG(
+     CASE WHEN ${colorImagesTable.id} IS NOT NULL 
+     THEN JSON_BUILD_OBJECT(
+       'id', ${colorImagesTable.id},
+       'images', ${colorImagesTable.images},
+       'colorImage', ${colorImagesTable.colorImage}  
+     )
+     ELSE NULL END
+   ) FILTER (WHERE ${colorImagesTable.id} IS NOT NULL),
+   'null'
+ )
+   `.as("colorImage"),
     })
     .from(productsTable)
     .leftJoin(
@@ -106,6 +120,10 @@ export const getProduct = async (c: Context) => {
       eq(productsTable.id, badgesToProducts.productId)
     )
     .leftJoin(badgesTable, eq(badgesToProducts.badgeId, badgesTable.id))
+    .leftJoin(
+      colorImagesTable,
+      eq(colorImagesTable.productId, productsTable.id)
+    )
     .where(eq(productsTable.slug, slug))
     .groupBy(productsTable.id);
 

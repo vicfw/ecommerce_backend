@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:17.4
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  elasticsearch:
+    image: elasticsearch:8.16.5
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+
+  bun:
+    image: oven/bun
+    container_name: bun_app
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: ["bun", "dev"]
+    depends_on:
+      - postgres
+      - elasticsearch
+    ports:
+      - "9000:9000"
+
+volumes:
+  pgdata:
+  esdata:

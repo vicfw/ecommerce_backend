@@ -7,6 +7,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { addressesTable } from "./addresses";
+import { commentsTable } from "./comments";
 
 export const usersTable = pgTable("users", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -23,4 +24,5 @@ export const usersTable = pgTable("users", {
 
 export const userRelations = relations(usersTable, ({ many }) => ({
   addresses: many(addressesTable),
+  comments: many(commentsTable),
 }));

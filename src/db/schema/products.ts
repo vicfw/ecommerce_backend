@@ -10,6 +10,7 @@ import {
 import { badgesToProducts } from "./badgesToProducts";
 import { categoriesTable } from "./categories";
 import { brandsTable } from "./brands";
+import { commentsTable } from "./comments";
 
 export const productsTable = pgTable("products", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -39,4 +40,5 @@ export const productsRelations = relations(productsTable, ({ many, one }) => ({
     fields: [productsTable.brandId],
     references: [brandsTable.id],
   }),
+  comments: many(commentsTable),
 }));

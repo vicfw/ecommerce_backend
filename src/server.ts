@@ -18,6 +18,7 @@ import {
   productRoutes,
   uploadRoutes,
   userRoutes,
+  commentRoutes,
 } from "./routes";
 
 const app = new Hono().basePath("/api/v1");
@@ -49,6 +50,7 @@ app.route("/cart", cartRoutes);
 app.route("/deliveryCost", deliveryCostRoutes);
 app.route("/payment", paymentRoutes);
 app.route("/colorImage", colorImageRoutes);
+app.route("/comment", commentRoutes);
 
 cloudinary.config({
   cloud_name: Bun.env.CLOUDINARY_CLOUD_NAME,

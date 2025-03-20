@@ -10,3 +10,4 @@ export * as deliveryCost from "./deliveryCostControllers.";
 export * as payment from "./paymentControllers";
 export * as brand from "./brandControllers";
 export * as colorImage from "./colorImageControllers";
+export * as comment from "./commentControllers";

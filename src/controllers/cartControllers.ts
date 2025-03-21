@@ -1,7 +1,9 @@
 import {
   and,
+  desc,
   eq,
   getTableColumns,
+  gt,
   InferModel,
   InferSelectModel,
   sql,
@@ -612,128 +614,136 @@ export const cartGetter = async <
   trx: T,
   userId: number
 ) => {
+  // First, get the cart
   const [cart] = await trx
-    .select({
-      ...getTableColumns(cartsTable),
-      deliveryCost: sql<InferSelectModel<typeof deliveryCostsTable>>`
-      COALESCE(
-        (SELECT 
-          JSONB_BUILD_OBJECT(
-            'id', ${deliveryCostsTable.id},
-            'cost', ${deliveryCostsTable.cost}
-          )
-        FROM ${deliveryCostsTable}
-        WHERE ${deliveryCostsTable.id} IS NOT NULL AND ${deliveryCostsTable.id} = ${cartsTable.deliveryCostId}
-        ORDER BY ${deliveryCostsTable.createdAt} DESC
-        LIMIT 1),
-        '{}'::jsonb
-      )
-    `.as("deliveryCost"),
-      cartItems: sql<InferSelectModel<typeof cartItemsTable>[]>`
-  COALESCE(
-    JSON_AGG(
-      CASE WHEN ${cartItemsTable.id} IS NOT NULL
-      THEN JSON_BUILD_OBJECT(
-        'id', ${cartItemsTable.id},
-        'productId', ${cartItemsTable.productId},
-        'quantity', ${cartItemsTable.quantity},
-        'itemPrice', ${cartItemsTable.itemPrice},
-        'product', JSON_BUILD_OBJECT(
-          'id', ${productsTable.id},
-          'quantity', ${productsTable.quantity},
-          'prName', ${productsTable.prName},
-          'enName', ${productsTable.enName},
-          'slug', ${productsTable.slug},
-          'price', ${productsTable.price},
-          'discount', ${productsTable.discount},
-          'weight', ${productsTable.weight},
-          'description', ${productsTable.description},
-          'images', ${productsTable.images},
-          'point', ${productsTable.point},
-          'createdAt', ${productsTable.createdAt},
-          'updatedAt', ${productsTable.updatedAt}
-        )
-      )
-      ELSE NULL END
-      ORDER BY ${cartItemsTable.id} DESC
-    ) FILTER (WHERE ${cartItemsTable.id} IS NOT NULL AND ${cartItemsTable.quantity} > 0),
-    '[]'
-  )
-  `.as("cartItems"),
-    })
+    .select()
     .from(cartsTable)
-    .where(eq(cartsTable.userId, userId))
-    .leftJoin(
-      deliveryCostsTable,
-      eq(deliveryCostsTable.id, cartsTable.deliveryCostId)
-    )
-    .leftJoin(cartItemsTable, eq(cartItemsTable.cartId, cartsTable.id))
-    .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
-    .groupBy(cartsTable.id);
+    .where(eq(cartsTable.userId, userId));
 
-  return cart;
+  if (!cart) return null;
+
+  // Get the delivery cost if it exists
+  let deliveryCost = null;
+  if (cart.deliveryCostId) {
+    const [cost] = await trx
+      .select()
+      .from(deliveryCostsTable)
+      .where(eq(deliveryCostsTable.id, cart.deliveryCostId))
+      .orderBy(desc(deliveryCostsTable.createdAt))
+      .limit(1);
+
+    if (cost) {
+      deliveryCost = {
+        id: cost.id,
+        cost: cost.cost,
+      };
+    }
+  }
+
+  // Get the cart items with their products
+  const cartItems = await trx
+    .select({
+      id: cartItemsTable.id,
+      productId: cartItemsTable.productId,
+      quantity: cartItemsTable.quantity,
+      itemPrice: cartItemsTable.itemPrice,
+      product: {
+        id: productsTable.id,
+        quantity: productsTable.quantity,
+        prName: productsTable.prName,
+        enName: productsTable.enName,
+        slug: productsTable.slug,
+        price: productsTable.price,
+        discount: productsTable.discount,
+        weight: productsTable.weight,
+        description: productsTable.description,
+        images: productsTable.images,
+        point: productsTable.point,
+        createdAt: productsTable.createdAt,
+        updatedAt: productsTable.updatedAt,
+      },
+    })
+    .from(cartItemsTable)
+    .where(
+      and(eq(cartItemsTable.cartId, cart.id), gt(cartItemsTable.quantity, 0))
+    )
+    .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
+    .orderBy(desc(cartItemsTable.id));
+
+  // Return the complete cart object
+  return {
+    ...cart,
+    deliveryCost: deliveryCost || {},
+    cartItems: cartItems || [],
+  };
 };
 
 const anonCartGetter = async <
   T extends Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db
 >(
   trx: T,
-  userId: number
+  cartId: number // Renamed from userId for clarity since it's actually the cart ID
 ) => {
+  // First, get the anonymous cart
   const [cart] = await trx
-    .select({
-      ...getTableColumns(anonCartsTable),
-      deliveryCost: sql<InferSelectModel<typeof deliveryCostsTable>>`
-      COALESCE(
-        (SELECT 
-          JSONB_BUILD_OBJECT(
-            'id', ${deliveryCostsTable.id},
-            'cost', ${deliveryCostsTable.cost}
-          )
-        FROM ${deliveryCostsTable}
-        WHERE ${deliveryCostsTable.id} IS NOT NULL AND ${deliveryCostsTable.id} = ${anonCartsTable.deliveryCostId}
-        ORDER BY ${deliveryCostsTable.createdAt} DESC
-        LIMIT 1),
-        '{}'::jsonb
-      )
-    `.as("deliveryCost"),
-      cartItems: sql<InferSelectModel<typeof cartItemsTable>[]>`
-  COALESCE(
-    JSON_AGG(
-      CASE WHEN ${cartItemsTable.id} IS NOT NULL
-      THEN JSON_BUILD_OBJECT(
-        'id', ${cartItemsTable.id},
-        'productId', ${cartItemsTable.productId},
-        'quantity', ${cartItemsTable.quantity},
-        'itemPrice', ${cartItemsTable.itemPrice},
-        'product', JSON_BUILD_OBJECT(
-          'id', ${productsTable.id},
-          'quantity', ${productsTable.quantity},
-          'prName', ${productsTable.prName},
-          'enName', ${productsTable.enName},
-          'slug', ${productsTable.slug},
-          'price', ${productsTable.price},
-          'discount', ${productsTable.discount},
-          'weight', ${productsTable.weight},
-          'description', ${productsTable.description},
-          'images', ${productsTable.images},
-          'point', ${productsTable.point},
-          'createdAt', ${productsTable.createdAt},
-          'updatedAt', ${productsTable.updatedAt}
-        )
-      )
-      ELSE NULL END
-      ORDER BY ${cartItemsTable.id} DESC
-    ) FILTER (WHERE ${cartItemsTable.id} IS NOT NULL AND ${cartItemsTable.quantity} > 0),
-    '[]'
-  )
-  `.as("cartItems"),
-    })
+    .select()
     .from(anonCartsTable)
-    .where(eq(anonCartsTable.id, userId))
-    .leftJoin(cartItemsTable, eq(cartItemsTable.cartId, anonCartsTable.id))
-    .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
-    .groupBy(anonCartsTable.id);
+    .where(eq(anonCartsTable.id, cartId));
 
-  return cart;
+  if (!cart) return null;
+
+  // Get the delivery cost if it exists
+  let deliveryCost = null;
+  if (cart.deliveryCostId) {
+    const [cost] = await trx
+      .select()
+      .from(deliveryCostsTable)
+      .where(eq(deliveryCostsTable.id, cart.deliveryCostId))
+      .orderBy(desc(deliveryCostsTable.createdAt))
+      .limit(1);
+
+    if (cost) {
+      deliveryCost = {
+        id: cost.id,
+        cost: cost.cost,
+      };
+    }
+  }
+
+  // Get the cart items with their products
+  const cartItems = await trx
+    .select({
+      id: cartItemsTable.id,
+      productId: cartItemsTable.productId,
+      quantity: cartItemsTable.quantity,
+      itemPrice: cartItemsTable.itemPrice,
+      product: {
+        id: productsTable.id,
+        quantity: productsTable.quantity,
+        prName: productsTable.prName,
+        enName: productsTable.enName,
+        slug: productsTable.slug,
+        price: productsTable.price,
+        discount: productsTable.discount,
+        weight: productsTable.weight,
+        description: productsTable.description,
+        images: productsTable.images,
+        point: productsTable.point,
+        createdAt: productsTable.createdAt,
+        updatedAt: productsTable.updatedAt,
+      },
+    })
+    .from(cartItemsTable)
+    .where(
+      and(eq(cartItemsTable.cartId, cart.id), gt(cartItemsTable.quantity, 0))
+    )
+    .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
+    .orderBy(desc(cartItemsTable.id));
+
+  // Return the complete cart object
+  return {
+    ...cart,
+    deliveryCost: deliveryCost || {},
+    cartItems: cartItems || [],
+  };
 };

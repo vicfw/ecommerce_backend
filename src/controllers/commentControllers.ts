@@ -1,6 +1,6 @@
 import { Context } from "hono";
 import { db } from "../db";
-import { and, eq, SQL } from "drizzle-orm";
+import { and, eq, InferSelectModel, sql, SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { brandsTable } from "../db/schema/brands";
 import { commentsTable } from "../db/schema/comments";
@@ -22,11 +22,27 @@ export const getComments = async (c: Context) => {
   }
 
   // Create the query with conditions and join
+  // const query = db
+  //   .select({
+  //     comment: commentsTable,
+  //     user: {
+  //       id: usersTable.id,
+  //     },
+  //   })
+  //   .from(commentsTable)
+  //   .leftJoin(usersTable, eq(commentsTable.userId, usersTable.id));
+
   const query = db
     .select({
-      comment: commentsTable,
+      // Select comment fields
+      id: commentsTable.id,
+      productId: commentsTable.productId,
+      userId: commentsTable.userId,
+      body: commentsTable.body,
+      // Select user fields
       user: {
         id: usersTable.id,
+        // Add other user fields you need
       },
     })
     .from(commentsTable)

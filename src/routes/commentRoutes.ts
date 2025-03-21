@@ -10,7 +10,7 @@ comments.get("/", (c) => comment.getComments(c));
 comments.post("/", protect, zValidator("json", validation.commentSchema), (c) =>
   comment.createComment(c)
 );
-// comments.delete("/:id", protect, (c) => comment.deleteBrand(c));
-// comments.patch("/:id", protect, (c) => comment.updateBrand(c));
+comments.delete("/:id", protect, (c) => comment.deleteComment(c));
+comments.patch("/:id", protect, (c) => comment.updateComment(c));
 
 export default comments;

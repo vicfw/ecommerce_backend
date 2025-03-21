@@ -1,11 +1,11 @@
+import { and, eq, SQL } from "drizzle-orm";
 import { Context } from "hono";
-import { db } from "../db";
-import { and, eq, InferSelectModel, sql, SQL } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { brandsTable } from "../db/schema/brands";
+import { db } from "../db";
 import { commentsTable } from "../db/schema/comments";
-import { CommentType } from "../validation/validation";
+import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
+import { CommentType } from "../validation/validation";
 
 export const getComments = async (c: Context) => {
   const url = c.req.query();
@@ -21,32 +21,32 @@ export const getComments = async (c: Context) => {
     conditions.push(eq(commentsTable.userId, +url.userId));
   }
 
-  // Create the query with conditions and join
-  // const query = db
-  //   .select({
-  //     comment: commentsTable,
-  //     user: {
-  //       id: usersTable.id,
-  //     },
-  //   })
-  //   .from(commentsTable)
-  //   .leftJoin(usersTable, eq(commentsTable.userId, usersTable.id));
+  if (url.isApproved) {
+    conditions.push(
+      eq(commentsTable.isApproved, url.isApproved.toLowerCase() === "true")
+    );
+  }
 
   const query = db
     .select({
       // Select comment fields
       id: commentsTable.id,
       productId: commentsTable.productId,
-      userId: commentsTable.userId,
       body: commentsTable.body,
       // Select user fields
       user: {
         id: usersTable.id,
         // Add other user fields you need
       },
+      product: {
+        id: productsTable.id,
+        prName: productsTable.prName,
+        // Add other product fields you need
+      },
     })
     .from(commentsTable)
-    .leftJoin(usersTable, eq(commentsTable.userId, usersTable.id));
+    .leftJoin(usersTable, eq(commentsTable.userId, usersTable.id))
+    .leftJoin(productsTable, eq(commentsTable.productId, productsTable.id));
 
   // Apply conditions if any exist
   const finalQuery =
@@ -82,42 +82,44 @@ export const createComment = async (c: Context) => {
   });
 };
 
-export const deleteBrand = async (c: Context) => {
+export const deleteComment = async (c: Context) => {
   const { id } = c.req.param();
 
-  const brand = await db.delete(brandsTable).where(eq(brandsTable.id, +id));
+  const comment = await db
+    .delete(commentsTable)
+    .where(eq(commentsTable.id, +id));
 
-  if (brand.rowCount === 0) {
+  if (comment.rowCount === 0) {
     throw new HTTPException(404, {
-      message: "Brand not found.",
+      message: "Comment not found.",
     });
   }
 
   return c.json({
     success: true,
-    message: "Brand deleted successfully.",
+    message: "Comment deleted successfully.",
   });
 };
 
-export const updateBrand = async (c: Context) => {
+export const updateComment = async (c: Context) => {
   const { id } = c.req.param();
-  const body = await c.req.json();
+  const body: Partial<CommentType> = await c.req.json();
 
-  const [brand] = await db
-    .update(brandsTable)
-    .set({ name: body.name, image: body.image })
-    .where(eq(brandsTable.id, +id))
+  const [comment] = await db
+    .update(commentsTable)
+    .set({ isApproved: body.isApproved, image: body.image, rate: body.rate })
+    .where(eq(commentsTable.id, +id))
     .returning();
 
-  if (!brand) {
+  if (!comment) {
     throw new HTTPException(404, {
-      message: "Brand not found.",
+      message: "Comment not found.",
     });
   }
 
   return c.json({
     success: true,
-    data: brand,
-    message: "Brand updated successfully.",
+    data: comment,
+    message: "Comment updated successfully.",
   });
 };

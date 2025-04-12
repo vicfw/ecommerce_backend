@@ -20,6 +20,7 @@ import {
   calculateProfit,
 } from "../utils/calculateProfit";
 import { deliveryCostsTable } from "../db/schema/deliveryCosts";
+import { colorImagesTable } from "../db/schema/colorImage";
 
 export const getCart = async (c: Context) => {
   const user = c.get("user");
@@ -212,9 +213,12 @@ export const getAnonCart = async (c: Context) => {
 export const createAnonCart = async (c: Context) => {
   const { anoncartid = 0 } = await c.req.header();
 
-  console.log(anoncartid, "anoncartid");
-
-  const { productId, increment = true, deliveryCostId } = await c.req.json();
+  const {
+    productId,
+    increment = true,
+    deliveryCostId,
+    coloImageId,
+  } = await c.req.json();
 
   // Check if the product exists and has a valid quantity
   const [product] = await db
@@ -265,6 +269,7 @@ export const createAnonCart = async (c: Context) => {
         productId: product.id,
         quantity: 1,
         itemPrice: product.price,
+        coloImageId,
       });
 
       return await anonCartGetter(trx, createdCart.id);
@@ -306,6 +311,7 @@ export const createAnonCart = async (c: Context) => {
           productId: product.id,
           quantity: 1,
           itemPrice: product.price,
+          coloImageId,
         });
       }
 
@@ -647,6 +653,10 @@ export const cartGetter = async <
       productId: cartItemsTable.productId,
       quantity: cartItemsTable.quantity,
       itemPrice: cartItemsTable.itemPrice,
+      colorImage: {
+        image: colorImagesTable.images,
+        id: colorImagesTable.id,
+      },
       product: {
         id: productsTable.id,
         quantity: productsTable.quantity,
@@ -668,6 +678,10 @@ export const cartGetter = async <
       and(eq(cartItemsTable.cartId, cart.id), gt(cartItemsTable.quantity, 0))
     )
     .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
+    .leftJoin(
+      colorImagesTable,
+      eq(colorImagesTable.productId, productsTable.id)
+    )
     .orderBy(desc(cartItemsTable.id));
 
   // Return the complete cart object
@@ -717,6 +731,10 @@ const anonCartGetter = async <
       productId: cartItemsTable.productId,
       quantity: cartItemsTable.quantity,
       itemPrice: cartItemsTable.itemPrice,
+      colorImage: {
+        image: colorImagesTable.images,
+        id: colorImagesTable.id,
+      },
       product: {
         id: productsTable.id,
         quantity: productsTable.quantity,
@@ -738,6 +756,10 @@ const anonCartGetter = async <
       and(eq(cartItemsTable.cartId, cart.id), gt(cartItemsTable.quantity, 0))
     )
     .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
+    .leftJoin(
+      colorImagesTable,
+      eq(colorImagesTable.productId, productsTable.id)
+    )
     .orderBy(desc(cartItemsTable.id));
 
   // Return the complete cart object

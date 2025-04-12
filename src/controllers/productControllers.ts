@@ -10,8 +10,6 @@ import { builderFunc } from "../utils";
 import { colorImagesTable } from "../db/schema/colorImage";
 
 export const getProducts = async (c: Context) => {
-  console.log("plp fetched");
-
   const query: ProductTypes.ProductQueryStringType = c.req.query();
   const pagination = builderFunc.paginationBuilder(query);
 
@@ -164,16 +162,18 @@ export const createProduct = async (c: Context) => {
       })
       .returning();
 
-    const productBadgesValue = badges.map((badgeId: number) => ({
-      badgeId,
-      productId: product.id,
-    }));
+    let productBadgesValue = [];
 
-    await tx.insert(badgesToProducts).values(productBadgesValue);
+    if (badges?.length > 0) {
+      productBadgesValue = badges.map((badgeId: number) => ({
+        badgeId,
+        productId: product.id,
+      }));
+      await tx.insert(badgesToProducts).values(productBadgesValue);
+    }
 
     return product;
   });
-
   const [result] = await db
     .select({
       ...getTableColumns(productsTable),

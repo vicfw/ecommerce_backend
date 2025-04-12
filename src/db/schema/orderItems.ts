@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import { integer, pgTable, real } from "drizzle-orm/pg-core";
 import { ordersTable } from "./orders";
+import { productsTable } from "./products";
 
 export const orderItemsTable = pgTable("order_items", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -15,8 +16,8 @@ export const orderItemsRelations = relations(orderItemsTable, ({ one }) => ({
     fields: [orderItemsTable.orderId],
     references: [ordersTable.id],
   }),
-  product: one(ordersTable, {
+  product: one(productsTable, {
     fields: [orderItemsTable.productId],
-    references: [ordersTable.id],
+    references: [productsTable.id],
   }),
 }));

@@ -78,8 +78,6 @@ export const getProducts = async (c: Context) => {
 export const getProduct = async (c: Context) => {
   const { slug } = c.req.param();
 
-  console.log("pdp fetched");
-
   const [product] = await db
     .select({
       ...getTableColumns(productsTable),

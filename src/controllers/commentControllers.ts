@@ -1,4 +1,4 @@
-import { and, eq, SQL } from "drizzle-orm";
+import { and, count, eq, SQL } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../db";
@@ -6,6 +6,10 @@ import { commentsTable } from "../db/schema/comments";
 import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
 import { CommentType } from "../validation/validation";
+import {
+  paginatedResponseBuilder,
+  paginationBuilder,
+} from "../utils/builder/builderFunc";
 
 export const getComments = async (c: Context) => {
   const url = c.req.query();
@@ -21,11 +25,9 @@ export const getComments = async (c: Context) => {
     conditions.push(eq(commentsTable.userId, +url.userId));
   }
 
-  if (url.isApproved) {
-    conditions.push(
-      eq(commentsTable.isApproved, url.isApproved.toLowerCase() === "true")
-    );
-  }
+  conditions.push(eq(commentsTable.isApproved, true));
+
+  const pagination = paginationBuilder(url);
 
   const query = db
     .select({
@@ -33,20 +35,28 @@ export const getComments = async (c: Context) => {
       id: commentsTable.id,
       productId: commentsTable.productId,
       body: commentsTable.body,
+      image: commentsTable.image,
       // Select user fields
       user: {
         id: usersTable.id,
-        // Add other user fields you need
+        name: usersTable.name,
+        lastName: usersTable.lastName,
+        image: usersTable.lastName,
       },
-      product: {
-        id: productsTable.id,
-        prName: productsTable.prName,
-        // Add other product fields you need
-      },
+      createdAt: commentsTable.createdAt,
+      updatedAt: commentsTable.updatedAt,
     })
     .from(commentsTable)
     .leftJoin(usersTable, eq(commentsTable.userId, usersTable.id))
     .leftJoin(productsTable, eq(commentsTable.productId, productsTable.id));
+
+  if (pagination.skip) {
+    query.offset(pagination.skip);
+  }
+
+  if (pagination.limit) {
+    query.limit(pagination.limit);
+  }
 
   // Apply conditions if any exist
   const finalQuery =
@@ -54,12 +64,23 @@ export const getComments = async (c: Context) => {
 
   // Execute the query
   const comments = await finalQuery;
+  const [total] = await db
+    .select({ count: count() })
+    .from(commentsTable)
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
 
-  return c.json({
-    success: true,
-    data: comments,
-    message: "Comments retrieved successfully",
-  });
+  const hasMore = pagination.page * pagination.limit < total.count;
+
+  return c.json(
+    paginatedResponseBuilder(
+      comments,
+      "Comments retrieved successfully",
+      total.count,
+      pagination.page,
+      hasMore,
+      true
+    )
+  );
 };
 export const createComment = async (c: Context) => {
   const body: CommentType = await c.req.json();
@@ -71,6 +92,7 @@ export const createComment = async (c: Context) => {
       productId: body.productId,
       body: body.body,
       image: body.image,
+      isApproved: true,
     })
     .returning();
 

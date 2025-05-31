@@ -18,6 +18,25 @@ export const paginationBuilder = (
 
   if (page) pagination.skip = +page > 1 ? (+page - 1) * +limit : 0;
   if (limit) pagination.limit = +limit;
+  pagination.page = +page;
 
   return pagination;
+};
+
+export const paginatedResponseBuilder = (
+  data: any,
+  message: string,
+  total: number,
+  page: number,
+  hasMore: boolean,
+  success: boolean
+) => {
+  return {
+    success,
+    data,
+    message,
+    total,
+    page,
+    hasMore,
+  };
 };

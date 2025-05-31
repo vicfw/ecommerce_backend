@@ -1,5 +1,11 @@
 import { relations } from "drizzle-orm";
-import { boolean, integer, pgTable, text } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 import { productsTable } from "./products";
 import { usersTable } from "./users";
 
@@ -10,6 +16,8 @@ export const commentsTable = pgTable("comments", {
   isApproved: boolean().default(false),
   productId: integer("productId").references(() => productsTable.id),
   userId: integer("userId").references(() => usersTable.id),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
 });
 
 export const commentsRelations = relations(commentsTable, ({ one }) => ({

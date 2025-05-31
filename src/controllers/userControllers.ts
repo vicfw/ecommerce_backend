@@ -222,6 +222,7 @@ export const getMe = async (c: Context) => {
       phoneNumber: user.phoneNumber,
       name: user.name,
       lastName: user.lastName,
+      id: user.id,
     },
     message: "User found successfully",
   });

@@ -66,7 +66,6 @@ export const commentSchema = z.object({
   userId: z.number(),
   productId: z.number(),
   body: z.string(),
-  rate: z.number(),
   isApproved: z.boolean().optional(),
   image: z.string(),
 });

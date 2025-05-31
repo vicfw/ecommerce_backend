@@ -6,7 +6,6 @@ import { usersTable } from "./users";
 export const commentsTable = pgTable("comments", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   body: text().notNull(),
-  rate: integer().notNull(),
   image: text().notNull(),
   isApproved: boolean().default(false),
   productId: integer("productId").references(() => productsTable.id),

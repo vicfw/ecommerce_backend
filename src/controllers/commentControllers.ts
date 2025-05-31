@@ -71,7 +71,6 @@ export const createComment = async (c: Context) => {
       productId: body.productId,
       body: body.body,
       image: body.image,
-      rate: body.rate,
     })
     .returning();
 
@@ -107,7 +106,7 @@ export const updateComment = async (c: Context) => {
 
   const [comment] = await db
     .update(commentsTable)
-    .set({ isApproved: body.isApproved, image: body.image, rate: body.rate })
+    .set({ isApproved: body.isApproved, image: body.image })
     .where(eq(commentsTable.id, +id))
     .returning();
 

@@ -679,7 +679,7 @@ export const cartGetter = async <
       quantity: cartItemsTable.quantity,
       itemPrice: cartItemsTable.itemPrice,
       colorImage: {
-        image: colorImagesTable.images,
+        images: colorImagesTable.images,
         id: colorImagesTable.id,
         name: colorImagesTable.name,
       },
@@ -758,7 +758,7 @@ const anonCartGetter = async <
       quantity: cartItemsTable.quantity,
       itemPrice: cartItemsTable.itemPrice,
       colorImage: {
-        image: colorImagesTable.images,
+        images: colorImagesTable.images,
         id: colorImagesTable.id,
         name: colorImagesTable.name,
       },

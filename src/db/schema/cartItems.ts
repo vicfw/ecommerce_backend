@@ -12,7 +12,7 @@ export const cartItemsTable = pgTable("cart_items", {
   productId: integer("product_id").notNull(),
   cartId: integer("cart_id"),
   anonCartId: varchar("anon_cart_id", { length: 255 }),
-  coloImageId: integer("color_image_id"),
+  colorImageId: integer("color_image_id"),
 });
 
 export const cartItemsRelations = relations(cartItemsTable, ({ one }) => ({
@@ -29,7 +29,7 @@ export const cartItemsRelations = relations(cartItemsTable, ({ one }) => ({
     references: [productsTable.id],
   }),
   colorImage: one(colorImagesTable, {
-    fields: [cartItemsTable.coloImageId],
+    fields: [cartItemsTable.colorImageId],
     references: [colorImagesTable.id],
   }),
 }));

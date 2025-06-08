@@ -1,4 +1,4 @@
-import { asc, eq, getTableColumns, sql } from "drizzle-orm";
+import { asc, eq, getTableColumns, sql, SQL } from "drizzle-orm";
 import { Context } from "hono";
 import { productsSeed } from "../../prisma/data";
 import { db } from "../db";
@@ -9,41 +9,39 @@ import { ProductTypes } from "../types";
 import { builderFunc } from "../utils";
 import { colorImagesTable } from "../db/schema/colorImage";
 
-export const getProducts = async (c: Context) => {
-  const query: ProductTypes.ProductQueryStringType = c.req.query();
-  const pagination = builderFunc.paginationBuilder(query);
-
-  const products = await db
+const getProductWithRelations = (whereClause: SQL<unknown>) => {
+  return db
     .select({
       ...getTableColumns(productsTable),
-      colorImage: sql<string>`
-       COALESCE(
-       JSON_AGG(
-        CASE WHEN ${colorImagesTable.id} IS NOT NULL 
-        THEN JSON_BUILD_OBJECT(
-          'id', ${colorImagesTable.id},
-          'images', ${colorImagesTable.images},
-          'colorImage', ${colorImagesTable.colorImage}  
-        )
-        ELSE NULL END
-      ) FILTER (WHERE ${colorImagesTable.id} IS NOT NULL),
-      'null'
-    )
-      `.as("colorImage"),
       badges: sql<string>`
-    COALESCE(
-      JSON_AGG(
-        CASE WHEN ${badgesTable.id} IS NOT NULL 
-        THEN JSON_BUILD_OBJECT(
-          'id', ${badgesTable.id},
-          'title', ${badgesTable.title},
-          'icon', ${badgesTable.icon}  
+        COALESCE(
+          JSON_AGG(
+            CASE WHEN ${badgesTable.id} IS NOT NULL 
+            THEN JSON_BUILD_OBJECT(
+              'id', ${badgesTable.id},
+              'title', ${badgesTable.title},
+              'icon', ${badgesTable.icon}  
+            )
+            ELSE NULL END
+          ) FILTER (WHERE ${badgesTable.id} IS NOT NULL),
+          '[]'
         )
-        ELSE NULL END
-      ) FILTER (WHERE ${badgesTable.id} IS NOT NULL),
-      '[]'
-    )
-  `.as("badges"),
+      `.as("badges"),
+      colorImages: sql<string>`
+        COALESCE(
+          JSON_AGG(
+            CASE WHEN ${colorImagesTable.id} IS NOT NULL 
+            THEN JSON_BUILD_OBJECT(
+              'id', ${colorImagesTable.id},
+              'images', ${colorImagesTable.images},
+              'colorImage', ${colorImagesTable.colorImage},
+              'name', ${colorImagesTable.name}
+            )
+            ELSE NULL END
+          ) FILTER (WHERE ${colorImagesTable.id} IS NOT NULL),
+          '[]'
+        )
+      `.as("colorImages"),
     })
     .from(productsTable)
     .leftJoin(
@@ -55,12 +53,19 @@ export const getProducts = async (c: Context) => {
       colorImagesTable,
       eq(colorImagesTable.productId, productsTable.id)
     )
-    .where(
-      query.categoryId
-        ? eq(productsTable.categoryId, +query.categoryId)
-        : undefined
-    )
-    .groupBy(productsTable.id)
+    .where(whereClause)
+    .groupBy(productsTable.id);
+};
+
+export const getProducts = async (c: Context) => {
+  const query: ProductTypes.ProductQueryStringType = c.req.query();
+  const pagination = builderFunc.paginationBuilder(query);
+
+  const products = await getProductWithRelations(
+    query.categoryId
+      ? eq(productsTable.categoryId, +query.categoryId)
+      : sql`1=1`
+  )
     .limit(pagination.limit)
     .offset(pagination.skip)
     .orderBy(asc(productsTable.id));
@@ -75,53 +80,11 @@ export const getProducts = async (c: Context) => {
     message: "Products retrieved successfully.",
   });
 };
+
 export const getProduct = async (c: Context) => {
   const { slug } = c.req.param();
 
-  const [product] = await db
-    .select({
-      ...getTableColumns(productsTable),
-      badges: sql<string>`
-    COALESCE(
-      JSON_AGG(
-        CASE WHEN ${badgesTable.id} IS NOT NULL
-        THEN JSON_BUILD_OBJECT(
-          'id', ${badgesTable.id},
-          'title', ${badgesTable.title},
-          'icon', ${badgesTable.icon}
-        )
-        ELSE NULL END
-      ) FILTER (WHERE ${badgesTable.id} IS NOT NULL),
-      '[]'
-    )
-  `.as("badges"),
-      colorImage: sql<string>`
-    COALESCE(
-    JSON_AGG(
-     CASE WHEN ${colorImagesTable.id} IS NOT NULL 
-     THEN JSON_BUILD_OBJECT(
-       'id', ${colorImagesTable.id},
-       'images', ${colorImagesTable.images},
-       'colorImage', ${colorImagesTable.colorImage}  
-     )
-     ELSE NULL END
-   ) FILTER (WHERE ${colorImagesTable.id} IS NOT NULL),
-   'null'
- )
-   `.as("colorImage"),
-    })
-    .from(productsTable)
-    .leftJoin(
-      badgesToProducts,
-      eq(productsTable.id, badgesToProducts.productId)
-    )
-    .leftJoin(badgesTable, eq(badgesToProducts.badgeId, badgesTable.id))
-    .leftJoin(
-      colorImagesTable,
-      eq(colorImagesTable.productId, productsTable.id)
-    )
-    .where(eq(productsTable.slug, slug))
-    .groupBy(productsTable.id);
+  const [product] = await getProductWithRelations(eq(productsTable.slug, slug));
 
   return c.json({
     success: true,
@@ -129,6 +92,7 @@ export const getProduct = async (c: Context) => {
     message: "Product retrieved successfully.",
   });
 };
+
 export const createProduct = async (c: Context) => {
   const {
     prName,
@@ -141,6 +105,7 @@ export const createProduct = async (c: Context) => {
     weight,
     discount,
     categoryId,
+    colorImageIds,
   } = await c.req.json();
 
   const product = await db.transaction(async (tx) => {
@@ -170,34 +135,23 @@ export const createProduct = async (c: Context) => {
       await tx.insert(badgesToProducts).values(productBadgesValue);
     }
 
+    if (colorImageIds?.length > 0) {
+      colorImageIds.forEach(async (colorImageId: number) => {
+        await tx
+          .update(colorImagesTable)
+          .set({
+            productId: product.id,
+          })
+          .where(eq(colorImagesTable.id, colorImageId));
+      });
+    }
+
     return product;
   });
-  const [result] = await db
-    .select({
-      ...getTableColumns(productsTable),
-      badges: sql<string>`
-      COALESCE(
-        JSON_AGG(
-          CASE WHEN ${badgesTable.id} IS NOT NULL 
-          THEN JSON_BUILD_OBJECT(
-            'id', ${badgesTable.id},
-            'title', ${badgesTable.title},
-            'icon', ${badgesTable.icon}  
-          )
-          ELSE NULL END
-        ) FILTER (WHERE ${badgesTable.id} IS NOT NULL),
-        '[]'
-      )
-    `.as("badges"),
-    })
-    .from(productsTable)
-    .leftJoin(
-      badgesToProducts,
-      eq(productsTable.id, badgesToProducts.productId)
-    )
-    .leftJoin(badgesTable, eq(badgesToProducts.badgeId, badgesTable.id))
-    .where(eq(productsTable.id, product.id))
-    .groupBy(productsTable.id);
+
+  const [result] = await getProductWithRelations(
+    eq(productsTable.id, product.id)
+  );
 
   return c.json({
     success: true,
@@ -205,6 +159,7 @@ export const createProduct = async (c: Context) => {
     message: "Product created successfully.",
   });
 };
+
 export const updateProduct = async (c: Context) => {
   const { id } = c.req.param();
   const body = await c.req.json();

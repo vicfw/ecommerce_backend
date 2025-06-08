@@ -6,7 +6,8 @@ export const colorImagesTable = pgTable("color_image", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   images: text("images").array().notNull(),
   colorImage: text("color_image").notNull(),
-  productId: integer().notNull(),
+  name: text("name").notNull(),
+  productId: integer("product_id").references(() => productsTable.id),
 });
 
 export const orderItemsRelations = relations(colorImagesTable, ({ one }) => ({

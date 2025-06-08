@@ -1,26 +1,17 @@
-import {
-  and,
-  desc,
-  eq,
-  getTableColumns,
-  gt,
-  InferModel,
-  InferSelectModel,
-  sql,
-} from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../db";
 import { anonCartsTable } from "../db/schema/anonCarts";
 import { cartItemsTable } from "../db/schema/cartItems";
 import { cartsTable } from "../db/schema/carts";
+import { colorImagesTable } from "../db/schema/colorImage";
+import { deliveryCostsTable } from "../db/schema/deliveryCosts";
 import { productsTable } from "../db/schema/products";
 import {
   calculatePriceAfterDiscount,
   calculateProfit,
 } from "../utils/calculateProfit";
-import { deliveryCostsTable } from "../db/schema/deliveryCosts";
-import { colorImagesTable } from "../db/schema/colorImage";
 
 export const getCart = async (c: Context) => {
   const user = c.get("user");
@@ -57,7 +48,8 @@ export const cartLength = async (c: Context) => {
 };
 
 export const createCart = async (c: Context) => {
-  const { productId, increment, deliveryCostId } = await c.req.json();
+  const { productId, increment, deliveryCostId, colorImageId } =
+    await c.req.json();
   const user = c.get("user");
 
   // Check if the product exists and has a valid quantity
@@ -78,6 +70,26 @@ export const createCart = async (c: Context) => {
       message: "Product quantity is not enough",
       cause: "quantity limit",
     });
+  }
+
+  // If colorImageId is provided, verify it exists and belongs to the product
+  if (colorImageId) {
+    const [colorImage] = await db
+      .select()
+      .from(colorImagesTable)
+      .where(
+        and(
+          eq(colorImagesTable.id, colorImageId),
+          eq(colorImagesTable.productId, productId)
+        )
+      );
+
+    if (!colorImage) {
+      throw new HTTPException(400, {
+        message: "Invalid color image selection",
+        cause: "invalid color image",
+      });
+    }
   }
 
   const cart = await db.transaction(async (trx) => {
@@ -110,6 +122,7 @@ export const createCart = async (c: Context) => {
         productId: product.id,
         quantity: 1,
         itemPrice: product.price,
+        colorImageId: colorImageId || null,
       });
 
       return await cartGetter(trx, user.id);
@@ -120,7 +133,8 @@ export const createCart = async (c: Context) => {
         .where(
           and(
             eq(cartItemsTable.cartId, cart.id),
-            eq(cartItemsTable.productId, product.id)
+            eq(cartItemsTable.productId, product.id),
+            eq(cartItemsTable.colorImageId, colorImageId || null)
           )
         )
         .limit(1);
@@ -145,6 +159,7 @@ export const createCart = async (c: Context) => {
           productId: product.id,
           quantity: 1,
           itemPrice: product.price,
+          colorImageId: colorImageId || null,
         });
       }
 
@@ -211,14 +226,9 @@ export const getAnonCart = async (c: Context) => {
 };
 
 export const createAnonCart = async (c: Context) => {
-  const { anoncartid = 0 } = await c.req.header();
-
-  const {
-    productId,
-    increment = true,
-    deliveryCostId,
-    coloImageId,
-  } = await c.req.json();
+  const { productId, increment, deliveryCostId, colorImageId } =
+    await c.req.json();
+  const { anoncartid } = await c.req.header();
 
   // Check if the product exists and has a valid quantity
   const [product] = await db
@@ -240,14 +250,34 @@ export const createAnonCart = async (c: Context) => {
     });
   }
 
-  const anonCart = await db.transaction(async (trx) => {
-    const [anonCart] = await trx
+  // If colorImageId is provided, verify it exists and belongs to the product
+  if (colorImageId) {
+    const [colorImage] = await db
+      .select()
+      .from(colorImagesTable)
+      .where(
+        and(
+          eq(colorImagesTable.id, colorImageId),
+          eq(colorImagesTable.productId, productId)
+        )
+      );
+
+    if (!colorImage) {
+      throw new HTTPException(400, {
+        message: "Invalid color image selection",
+        cause: "invalid color image",
+      });
+    }
+  }
+
+  const cart = await db.transaction(async (trx) => {
+    const [cart] = await trx
       .select()
       .from(anonCartsTable)
       .where(eq(anonCartsTable.id, +anoncartid))
       .limit(1);
 
-    if (!anonCart) {
+    if (!cart) {
       const [createdCart] = await trx
         .insert(anonCartsTable)
         .values({
@@ -269,7 +299,7 @@ export const createAnonCart = async (c: Context) => {
         productId: product.id,
         quantity: 1,
         itemPrice: product.price,
-        coloImageId,
+        colorImageId: colorImageId || null,
       });
 
       return await anonCartGetter(trx, createdCart.id);
@@ -279,39 +309,34 @@ export const createAnonCart = async (c: Context) => {
         .from(cartItemsTable)
         .where(
           and(
-            eq(cartItemsTable.cartId, anonCart.id),
-            eq(cartItemsTable.productId, product.id)
+            eq(cartItemsTable.cartId, cart.id),
+            eq(cartItemsTable.productId, product.id),
+            eq(cartItemsTable.colorImageId, colorImageId || null)
           )
         )
         .limit(1);
 
       if (existingCartItem) {
-        if (existingCartItem.quantity === 1 && !increment) {
-          await trx
-            .delete(cartItemsTable)
-            .where(eq(cartItemsTable.id, existingCartItem.id));
-        } else {
-          // Update existing cart item
-          await trx
-            .update(cartItemsTable)
-            .set({
-              quantity: increment
-                ? sql`${cartItemsTable.quantity} + 1`
-                : sql`${cartItemsTable.quantity} - 1`,
-              itemPrice: increment
-                ? sql`${cartItemsTable.itemPrice} + ${product.price}`
-                : sql`${cartItemsTable.itemPrice} - ${product.price}`,
-            })
-            .where(eq(cartItemsTable.id, existingCartItem.id));
-        }
+        // Update existing cart item
+        await trx
+          .update(cartItemsTable)
+          .set({
+            quantity: increment
+              ? sql`${cartItemsTable.quantity} + 1`
+              : sql`${cartItemsTable.quantity} - 1`,
+            itemPrice: increment
+              ? sql`${cartItemsTable.itemPrice} + ${product.price}`
+              : sql`${cartItemsTable.itemPrice} - ${product.price}`,
+          })
+          .where(eq(cartItemsTable.id, existingCartItem.id));
       } else {
         // Add new cart item
         await trx.insert(cartItemsTable).values({
-          cartId: anonCart.id,
+          cartId: cart.id,
           productId: product.id,
           quantity: 1,
           itemPrice: product.price,
-          coloImageId,
+          colorImageId: colorImageId || null,
         });
       }
 
@@ -319,37 +344,37 @@ export const createAnonCart = async (c: Context) => {
         increment,
         product.price,
         product.discount || 0,
-        anonCart.discountPrice || 0
+        cart.discountPrice || 0
       );
 
       const profitFromDiscount = await calculateProfitFromDiscount(
         increment,
         product.price,
         product.discount || 0,
-        anonCart.profitFromDiscount || 0
+        cart.profitFromDiscount || 0
       );
 
       await trx
         .update(anonCartsTable)
         .set({
           price: increment
-            ? anonCart.price + product.price
-            : anonCart.price - product.price,
+            ? cart.price + product.price
+            : cart.price - product.price,
           discountPrice,
           profitFromDiscount,
           totalDiscountPercentage: product.discount || 0,
         })
-        .where(eq(anonCartsTable.id, anonCart.id))
+        .where(eq(anonCartsTable.id, cart.id))
         .returning();
 
-      return await anonCartGetter(trx, +anoncartid);
+      return await anonCartGetter(trx, cart.id);
     }
   });
 
   return c.json({
     success: true,
-    data: anonCart,
-    message: `Cart ${anonCart ? "updated" : "created"} successfully`,
+    data: cart,
+    message: `Cart ${cart ? "updated" : "created"} successfully`,
   });
 };
 
@@ -656,6 +681,7 @@ export const cartGetter = async <
       colorImage: {
         image: colorImagesTable.images,
         id: colorImagesTable.id,
+        name: colorImagesTable.name,
       },
       product: {
         id: productsTable.id,
@@ -734,6 +760,7 @@ const anonCartGetter = async <
       colorImage: {
         image: colorImagesTable.images,
         id: colorImagesTable.id,
+        name: colorImagesTable.name,
       },
       product: {
         id: productsTable.id,

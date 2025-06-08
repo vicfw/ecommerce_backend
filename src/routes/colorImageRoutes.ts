@@ -1,8 +1,12 @@
 import { Hono } from "hono";
-import { colorImage } from "../controllers";
+import {
+  createColorImage,
+  updateColorImageProductId,
+} from "../controllers/colorImageControllers";
 
-const colorImages = new Hono();
+const colorImageRouter = new Hono();
 
-colorImages.post("/", (c) => colorImage.createColorImage(c));
+colorImageRouter.post("/", createColorImage);
+colorImageRouter.patch("/:id", updateColorImageProductId);
 
-export default colorImages;
+export default colorImageRouter;

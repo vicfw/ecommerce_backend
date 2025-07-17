@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../db";
@@ -134,10 +134,14 @@ export const createCart = async (c: Context) => {
           and(
             eq(cartItemsTable.cartId, cart.id),
             eq(cartItemsTable.productId, product.id),
-            eq(cartItemsTable.colorImageId, colorImageId || null)
+            colorImageId
+              ? eq(cartItemsTable.colorImageId, colorImageId)
+              : isNull(cartItemsTable.colorImageId)
           )
         )
         .limit(1);
+
+      console.log(existingCartItem, "existingCartItem");
 
       if (existingCartItem) {
         // Update existing cart item
@@ -311,7 +315,9 @@ export const createAnonCart = async (c: Context) => {
           and(
             eq(cartItemsTable.cartId, cart.id),
             eq(cartItemsTable.productId, product.id),
-            eq(cartItemsTable.colorImageId, colorImageId || null)
+            colorImageId
+              ? eq(cartItemsTable.colorImageId, colorImageId)
+              : isNull(cartItemsTable.colorImageId)
           )
         )
         .limit(1);
@@ -706,7 +712,10 @@ export const cartGetter = async <
     .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
     .leftJoin(
       colorImagesTable,
-      eq(colorImagesTable.productId, productsTable.id)
+      and(
+        eq(colorImagesTable.id, cartItemsTable.colorImageId),
+        eq(colorImagesTable.productId, productsTable.id)
+      )
     )
     .orderBy(desc(cartItemsTable.id));
 
@@ -785,7 +794,10 @@ const anonCartGetter = async <
     .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
     .leftJoin(
       colorImagesTable,
-      eq(colorImagesTable.productId, productsTable.id)
+      and(
+        eq(colorImagesTable.id, cartItemsTable.colorImageId),
+        eq(colorImagesTable.productId, productsTable.id)
+      )
     )
     .orderBy(desc(cartItemsTable.id));
 

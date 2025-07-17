@@ -42,6 +42,7 @@ export const productSchema = z.object({
   images: z.array(z.string()),
   colors: z.array(z.number()).optional(),
   badges: z.array(z.number()).optional(),
+  defaultColorImage: z.string(),
 });
 
 export const partialProductSchema = productSchema.partial();

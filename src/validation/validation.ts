@@ -16,6 +16,19 @@ export const addressSchema = z.object({
 
 export const addressSchemaPartial = addressSchema.partial();
 
+export const deleteAddressSchema = z.object({
+  id: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().positive()),
+});
+
+export const deleteAddressBulkSchema = z.object({
+  addressIds: z
+    .array(z.number().positive())
+    .min(1, "At least one address ID is required"),
+});
+
 export const categorySchema = z.object({
   name: z.string(),
   image: z.string(),

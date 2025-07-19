@@ -48,7 +48,7 @@ export const createOrder = async (c: Context) => {
         addressId: defaultAddress.id,
         totalAmount: cart.discountPrice || 0,
         profitFromDiscount: cart.profitFromDiscount,
-        deliveryAmount: cart.deliveryCost.cost,
+        deliveryAmount: cart.deliveryCost?.cost || 0,
       })
       .returning();
 

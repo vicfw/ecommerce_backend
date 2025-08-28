@@ -1,6 +1,5 @@
 import { asc, eq, getTableColumns, sql, SQL } from "drizzle-orm";
 import { Context } from "hono";
-import { productsSeed } from "../../prisma/data";
 import { db } from "../db";
 import { badgesTable } from "../db/schema/badges";
 import { badgesToProducts } from "../db/schema/badgesToProducts";
@@ -8,6 +7,9 @@ import { productsTable } from "../db/schema/products";
 import { ProductTypes } from "../types";
 import { builderFunc } from "../utils";
 import { colorImagesTable } from "../db/schema/colorImage";
+import { commentsTable } from "../db/schema/comments";
+import { cartItemsTable } from "../db/schema/cartItems";
+import { orderItemsTable } from "../db/schema/orderItems";
 
 const getProductWithRelations = (whereClause: SQL<unknown>) => {
   return db
@@ -105,6 +107,7 @@ export const createProduct = async (c: Context) => {
     weight,
     discount,
     categoryId,
+    brandId,
     colorImageIds,
   } = await c.req.json();
 
@@ -121,7 +124,9 @@ export const createProduct = async (c: Context) => {
         images,
         weight,
         discount,
+        defaultColorImage: colorImageIds[0],
         categoryId,
+        brandId,
       })
       .returning();
 
@@ -192,46 +197,29 @@ export const updateProduct = async (c: Context) => {
 export const deleteProduct = async (c: Context) => {
   const { id } = c.req.param();
 
-  const result = await db.transaction(async (trx) => {
-    try {
-      await trx
-        .delete(badgesToProducts)
-        .where(eq(badgesToProducts.productId, +id));
+  try {
+    const deletedProduct = await db
+      .delete(productsTable)
+      .where(eq(productsTable.id, +id))
+      .returning();
 
-      const deletedProduct = await trx
-        .delete(productsTable)
-        .where(eq(productsTable.id, +id))
-        .returning();
-
-      if (deletedProduct.length === 0) {
-        return c.json({
-          success: false,
-          message: "Product not found.",
-        });
-      }
-
-      return c.json({
-        success: true,
-        message: "Product deleted successfully.",
-      });
-    } catch (error) {
-      await trx.rollback();
+    if (deletedProduct.length === 0) {
       return c.json({
         success: false,
-        message: "Error occurred while deleting product.",
+        message: "Product not found.",
       });
     }
-  });
 
-  return result;
-};
-
-export const seedProductsData = async (c: Context) => {
-  await db.delete(productsTable);
-
-  await db.insert(productsTable).values(productsSeed as any);
-
-  return c.json({
-    success: true,
-  });
+    return c.json({
+      success: true,
+      message: "Product deleted successfully.",
+    });
+  } catch (error) {
+    console.error("Delete product error:", error);
+    return c.json({
+      success: false,
+      message: "Error occurred while deleting product.",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
 };

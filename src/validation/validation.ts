@@ -75,7 +75,14 @@ export const anonCartMatchSchema = z.object({
   userId: z.number(),
 });
 
-export type CommentType = z.infer<typeof commentSchema>;
+export const brandSchema = z.object({
+  name: z.string(),
+  engName: z.string(),
+  slug: z.string(),
+});
+
+export const partialBrandSchema = brandSchema.partial();
+
 export const commentSchema = z.object({
   userId: z.number(),
   productId: z.number(),

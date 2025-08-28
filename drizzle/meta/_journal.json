@@ -5,85 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1734174475883,
-      "tag": "0000_empty_gorgon",
+      "when": 1755257340692,
+      "tag": "0000_short_firebrand",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1734256098648,
-      "tag": "0001_low_kingpin",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1734258559166,
-      "tag": "0002_open_logan",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1734258628721,
-      "tag": "0003_milky_stardust",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1734258687734,
-      "tag": "0004_late_jackal",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1734258794457,
-      "tag": "0005_misty_omega_sentinel",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1734258925128,
-      "tag": "0006_luxuriant_kylun",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1734259746251,
-      "tag": "0007_complete_darwin",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1734514069911,
-      "tag": "0008_peaceful_nemesis",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1740211983360,
-      "tag": "0009_same_sheva_callister",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1740732046542,
-      "tag": "0010_high_the_captain",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1744471332135,
-      "tag": "0011_lush_roulette",
+      "when": 1755257352113,
+      "tag": "0001_greedy_argent",
       "breakpoints": true
     }
   ]

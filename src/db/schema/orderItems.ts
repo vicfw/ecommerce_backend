@@ -6,7 +6,9 @@ import { productsTable } from "./products";
 export const orderItemsTable = pgTable("order_items", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   orderId: integer("order_id").notNull(),
-  productId: integer("product_id").notNull(),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => productsTable.id, { onDelete: "cascade" }),
   quantity: integer("quantity").notNull(),
   price: real("price").notNull(),
 });

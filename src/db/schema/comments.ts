@@ -11,11 +11,15 @@ import { usersTable } from "./users";
 
 export const commentsTable = pgTable("comments", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  body: text().notNull(),
-  image: text().notNull(),
-  isApproved: boolean().default(false),
-  productId: integer("productId").references(() => productsTable.id),
-  userId: integer("userId").references(() => usersTable.id),
+  body: text("body").notNull(),
+  image: text("image").notNull(),
+  isApproved: boolean("isApproved").default(false),
+  productId: integer("productId").references(() => productsTable.id, {
+    onDelete: "cascade",
+  }),
+  userId: integer("userId").references(() => usersTable.id, {
+    onDelete: "cascade",
+  }),
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt").defaultNow(),
 });

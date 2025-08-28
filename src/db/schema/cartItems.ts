@@ -9,7 +9,9 @@ export const cartItemsTable = pgTable("cart_items", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   quantity: integer("quantity").notNull(),
   itemPrice: real("item_price").notNull(),
-  productId: integer("product_id").notNull(),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => productsTable.id, { onDelete: "cascade" }),
   cartId: integer("cart_id"),
   anonCartId: varchar("anon_cart_id", { length: 255 }),
   colorImageId: integer("color_image_id"),

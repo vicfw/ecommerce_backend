@@ -34,6 +34,43 @@ export const categorySchema = z.object({
   image: z.string(),
 });
 
+// Parent category schema (level 1)
+export const parentCategorySchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  slug: z.string().min(1, "Slug is required"),
+  description: z.string().optional(),
+  parentImage: z.string().optional(),
+  parentBanner: z.string().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().optional(),
+});
+
+// Child category schema (level 2)
+export const childCategorySchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  slug: z.string().min(1, "Slug is required"),
+  description: z.string().optional(),
+  parentId: z.number().positive("Valid parent ID is required"),
+  image: z.string().optional(),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().optional(),
+});
+
+// Subchild category schema (level 3)
+export const subchildCategorySchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  slug: z.string().min(1, "Slug is required"),
+  description: z.string().optional(),
+  parentId: z.number().positive("Valid parent ID is required"),
+  image: z.string().optional(),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().optional(),
+});
+
 export const colorsSchema = z.object({
   title: z.string(),
   hexCode: z.string(),

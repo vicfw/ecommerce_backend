@@ -3,13 +3,9 @@ import { Context } from "hono";
 import { db } from "../db";
 import { badgesTable } from "../db/schema/badges";
 import { badgesToProducts } from "../db/schema/badgesToProducts";
-import { productsTable } from "../db/schema/products";
-import { ProductTypes } from "../types";
-import { builderFunc } from "../utils";
 import { colorImagesTable } from "../db/schema/colorImage";
-import { commentsTable } from "../db/schema/comments";
-import { cartItemsTable } from "../db/schema/cartItems";
-import { orderItemsTable } from "../db/schema/orderItems";
+import { productsTable } from "../db/schema/products";
+import { builderFunc } from "../utils";
 
 const getProductWithRelations = (whereClause: SQL<unknown>) => {
   return db
@@ -60,7 +56,7 @@ const getProductWithRelations = (whereClause: SQL<unknown>) => {
 };
 
 export const getProducts = async (c: Context) => {
-  const query: ProductTypes.ProductQueryStringType = c.req.query();
+  const query = c.req.query();
   const pagination = builderFunc.paginationBuilder(query);
 
   const products = await getProductWithRelations(

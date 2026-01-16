@@ -1,4 +1,3 @@
-import { User } from "@prisma/client";
 import { eq } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -214,7 +213,7 @@ export const updateUserRole = async (c: Context) => {
 };
 
 export const getMe = async (c: Context) => {
-  const user: User = c.get("user");
+  const user = c.get("user");
 
   return c.json({
     success: true,

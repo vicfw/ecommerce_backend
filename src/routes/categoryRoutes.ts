@@ -8,6 +8,9 @@ const categories = new Hono();
 // get all categories
 categories.get("/", (c) => category.getCategories(c));
 
+// Get categories by id
+categories.get("/:id", (c) => category.getCategoriesById(c));
+
 // Get categories by level
 categories.get("/level/:level", (c) => category.getCategoriesByLevel(c));
 

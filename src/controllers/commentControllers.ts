@@ -5,7 +5,6 @@ import { db } from "../db";
 import { commentsTable } from "../db/schema/comments";
 import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
-import { CommentType } from "../validation/validation";
 import {
   paginatedResponseBuilder,
   paginationBuilder,
@@ -83,7 +82,7 @@ export const getComments = async (c: Context) => {
   );
 };
 export const createComment = async (c: Context) => {
-  const body: CommentType = await c.req.json();
+  const body = await c.req.json();
 
   const [newComment] = await db
     .insert(commentsTable)
@@ -124,7 +123,7 @@ export const deleteComment = async (c: Context) => {
 
 export const updateComment = async (c: Context) => {
   const { id } = c.req.param();
-  const body: Partial<CommentType> = await c.req.json();
+  const body = await c.req.json();
 
   const [comment] = await db
     .update(commentsTable)

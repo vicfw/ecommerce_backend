@@ -16,6 +16,22 @@ export const getCategories = async (c: Context) => {
   });
 };
 
+// Get categories by id
+export const getCategoriesById = async (c: Context) => {
+  const { id } = c.req.param();
+  const numId = parseInt(id);
+
+  const category = await db.query.categoriesTable.findFirst({
+    where: eq(categoriesTable.id, numId),
+  });
+
+  return c.json({
+    success: true,
+    data: category,
+    message: `id ${numId} categories retrieved successfully`,
+  });
+};
+
 // Create parent category (level 1)
 export const createParentCategory = async (c: Context) => {
   const body = await c.req.json();

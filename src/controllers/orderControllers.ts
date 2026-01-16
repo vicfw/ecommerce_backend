@@ -1,8 +1,6 @@
-import { OrderStatus } from "@prisma/client";
 import { and, count, eq } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { prisma } from "../config/prismaClient";
 import { db } from "../db";
 import {
   joinAddressQuery,
@@ -12,7 +10,7 @@ import {
 import { addressesTable } from "../db/schema/addresses";
 import { cartsTable } from "../db/schema/carts";
 import { orderItemsTable } from "../db/schema/orderItems";
-import { ordersTable, statusEnum } from "../db/schema/orders";
+import { ordersTable } from "../db/schema/orders";
 import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
 import { cartGetter } from "./cartControllers";

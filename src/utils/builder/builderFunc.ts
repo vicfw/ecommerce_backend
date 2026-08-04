@@ -10,15 +10,20 @@ export const productQueryStringBuilder = (
 };
 
 export const paginationBuilder = (
-  query: ProductTypes.ProductQueryStringType
+  query: ProductTypes.ProductQueryStringType & {
+    perPage?: string | number;
+    limit?: string | number;
+    page?: string | number;
+  }
 ) => {
-  const { page = 1, limit = 9999999999 } = query;
+  const page = +(query.page ?? 1);
+  const limit = +(query.perPage ?? query.limit ?? 9999999999);
 
   const pagination: Record<string, number> = {};
 
-  if (page) pagination.skip = +page > 1 ? (+page - 1) * +limit : 0;
-  if (limit) pagination.limit = +limit;
-  pagination.page = +page;
+  pagination.skip = page > 1 ? (page - 1) * limit : 0;
+  pagination.limit = limit;
+  pagination.page = page;
 
   return pagination;
 };

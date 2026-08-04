@@ -4,13 +4,19 @@ import { badge } from "../controllers";
 import { protect } from "../middlewares";
 import { validation } from "../validation";
 
+const badges = new Hono();
 
-const badges = new Hono()
+badges.get("/", (c) => badge.getBadges(c));
+badges.get("/:id", (c) => badge.getBadgeById(c));
+badges.post("/", protect, zValidator("json", validation.badgesSchema), (c) =>
+  badge.createBadge(c)
+);
+badges.patch(
+  "/:id",
+  protect,
+  zValidator("json", validation.partialBadgeSchema),
+  (c) => badge.updateBadge(c)
+);
+badges.delete("/:id", protect, (c) => badge.deleteBadge(c));
 
-badges.get("/", (c) => badge.getBadges(c))
-badges.post("/", protect, zValidator("json", validation.badgesSchema), (c) => badge.createBadge(c))
-badges.patch("/:id", protect, zValidator("json", validation.partialBadgeSchema), (c) => badge.updateBadge(c))
-badges.delete("/:id", protect, (c) => badge.deleteBadge(c))
-
-
-export default badges
+export default badges;

@@ -7,6 +7,13 @@ import { colorImagesTable } from "../db/schema/colorImage";
 import { productsTable } from "../db/schema/products";
 import { builderFunc } from "../utils";
 
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-_]/g, "");
+
 const getProductWithRelations = (whereClause: SQL<unknown>) => {
   return db
     .select({
@@ -73,7 +80,7 @@ export const getProducts = async (c: Context) => {
   return c.json({
     success: true,
     data: products,
-    page: query.page ? +query.page : 1,
+    page: pagination.page,
     total: allProductsCount,
     message: "Products retrieved successfully.",
   });
@@ -82,7 +89,22 @@ export const getProducts = async (c: Context) => {
 export const getProduct = async (c: Context) => {
   const { slug } = c.req.param();
 
-  const [product] = await getProductWithRelations(eq(productsTable.slug, slug));
+  // Admin getOne uses numeric id; storefront uses slug
+  const whereClause = /^\d+$/.test(slug)
+    ? eq(productsTable.id, +slug)
+    : eq(productsTable.slug, slug);
+
+  const [product] = await getProductWithRelations(whereClause);
+
+  if (!product) {
+    return c.json(
+      {
+        success: false,
+        message: "Product not found.",
+      },
+      404
+    );
+  }
 
   return c.json({
     success: true,
@@ -105,10 +127,11 @@ export const createProduct = async (c: Context) => {
     categoryId,
     brandId,
     colorImageIds,
+    defaultColorImage,
   } = await c.req.json();
 
   const product = await db.transaction(async (tx) => {
-    const [product] = await tx
+    const [created] = await tx
       .insert(productsTable)
       .values({
         prName,
@@ -116,38 +139,37 @@ export const createProduct = async (c: Context) => {
         description,
         price,
         quantity,
-        slug: enName,
+        slug: slugify(enName),
         images,
-        weight,
-        discount,
-        defaultColorImage: colorImageIds[0],
+        weight: weight ?? 0,
+        discount: discount ?? 0,
+        defaultColorImage: defaultColorImage || images?.[0] || "",
         categoryId,
         brandId,
       })
       .returning();
 
-    let productBadgesValue = [];
-
     if (badges?.length > 0) {
-      productBadgesValue = badges.map((badgeId: number) => ({
-        badgeId,
-        productId: product.id,
-      }));
-      await tx.insert(badgesToProducts).values(productBadgesValue);
+      await tx.insert(badgesToProducts).values(
+        badges.map((badgeId: number) => ({
+          badgeId,
+          productId: created.id,
+        }))
+      );
     }
 
     if (colorImageIds?.length > 0) {
-      colorImageIds.forEach(async (colorImageId: number) => {
-        await tx
-          .update(colorImagesTable)
-          .set({
-            productId: product.id,
-          })
-          .where(eq(colorImagesTable.id, colorImageId));
-      });
+      await Promise.all(
+        colorImageIds.map((colorImageId: number) =>
+          tx
+            .update(colorImagesTable)
+            .set({ productId: created.id })
+            .where(eq(colorImagesTable.id, colorImageId))
+        )
+      );
     }
 
-    return product;
+    return created;
   });
 
   const [result] = await getProductWithRelations(
@@ -171,21 +193,107 @@ export const updateProduct = async (c: Context) => {
     .where(eq(productsTable.id, +id));
 
   if (!isExist) {
-    return c.json({
-      success: false,
-      message: "Product not found.",
-    });
+    return c.json(
+      {
+        success: false,
+        message: "Product not found.",
+      },
+      404
+    );
   }
 
-  const [product] = await db
-    .update(productsTable)
-    .set(body)
-    .where(eq(productsTable.id, +id))
-    .returning();
+  const {
+    badges,
+    colorImageIds,
+    prName,
+    enName,
+    price,
+    images,
+    description,
+    quantity,
+    weight,
+    discount,
+    categoryId,
+    brandId,
+    defaultColorImage,
+  } = body;
+
+  const product = await db.transaction(async (tx) => {
+    const updateData: Partial<typeof productsTable.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+
+    if (prName !== undefined) updateData.prName = prName;
+    if (enName !== undefined) {
+      updateData.enName = enName;
+      updateData.slug = slugify(enName);
+    }
+    if (price !== undefined) updateData.price = price;
+    if (description !== undefined) updateData.description = description;
+    if (quantity !== undefined) updateData.quantity = quantity;
+    if (weight !== undefined) updateData.weight = weight;
+    if (discount !== undefined) updateData.discount = discount;
+    if (categoryId !== undefined) updateData.categoryId = categoryId;
+    if (brandId !== undefined) updateData.brandId = brandId;
+    if (images !== undefined) {
+      updateData.images = images;
+      if (defaultColorImage === undefined && images[0]) {
+        updateData.defaultColorImage = images[0];
+      }
+    }
+    if (defaultColorImage !== undefined) {
+      updateData.defaultColorImage = defaultColorImage;
+    }
+
+    const [updated] = await tx
+      .update(productsTable)
+      .set(updateData)
+      .where(eq(productsTable.id, +id))
+      .returning();
+
+    if (badges !== undefined) {
+      await tx
+        .delete(badgesToProducts)
+        .where(eq(badgesToProducts.productId, +id));
+
+      if (badges.length > 0) {
+        await tx.insert(badgesToProducts).values(
+          badges.map((badgeId: number) => ({
+            badgeId,
+            productId: +id,
+          }))
+        );
+      }
+    }
+
+    if (colorImageIds !== undefined) {
+      await tx
+        .update(colorImagesTable)
+        .set({ productId: null })
+        .where(eq(colorImagesTable.productId, +id));
+
+      if (colorImageIds.length > 0) {
+        await Promise.all(
+          colorImageIds.map((colorImageId: number) =>
+            tx
+              .update(colorImagesTable)
+              .set({ productId: +id })
+              .where(eq(colorImagesTable.id, colorImageId))
+          )
+        );
+      }
+    }
+
+    return updated;
+  });
+
+  const [result] = await getProductWithRelations(
+    eq(productsTable.id, product.id)
+  );
 
   return c.json({
     success: true,
-    data: product,
+    data: result,
     message: "Product updated successfully.",
   });
 };
@@ -200,10 +308,13 @@ export const deleteProduct = async (c: Context) => {
       .returning();
 
     if (deletedProduct.length === 0) {
-      return c.json({
-        success: false,
-        message: "Product not found.",
-      });
+      return c.json(
+        {
+          success: false,
+          message: "Product not found.",
+        },
+        404
+      );
     }
 
     return c.json({
@@ -212,10 +323,13 @@ export const deleteProduct = async (c: Context) => {
     });
   } catch (error) {
     console.error("Delete product error:", error);
-    return c.json({
-      success: false,
-      message: "Error occurred while deleting product.",
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
+    return c.json(
+      {
+        success: false,
+        message: "Error occurred while deleting product.",
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      500
+    );
   }
 };

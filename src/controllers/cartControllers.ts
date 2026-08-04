@@ -31,7 +31,7 @@ export const cartLength = async (c: Context) => {
   const [result] = await db
     .select({
       totalItems: sql<number>`COALESCE(SUM(${cartItemsTable.quantity}), 0)`.as(
-        "totalItems"
+        "totalItems",
       ),
     })
     .from(cartsTable)
@@ -80,8 +80,8 @@ export const createCart = async (c: Context) => {
       .where(
         and(
           eq(colorImagesTable.id, colorImageId),
-          eq(colorImagesTable.productId, productId)
-        )
+          eq(colorImagesTable.productId, productId),
+        ),
       );
 
     if (!colorImage) {
@@ -108,7 +108,7 @@ export const createCart = async (c: Context) => {
           deliveryCostId,
           discountPrice: calculatePriceAfterDiscount(
             product.price,
-            product.discount || 0
+            product.discount || 0,
           ),
           profitFromDiscount: product.discount
             ? calculateProfit(product.price, product.discount)
@@ -136,12 +136,10 @@ export const createCart = async (c: Context) => {
             eq(cartItemsTable.productId, product.id),
             colorImageId
               ? eq(cartItemsTable.colorImageId, colorImageId)
-              : isNull(cartItemsTable.colorImageId)
-          )
+              : isNull(cartItemsTable.colorImageId),
+          ),
         )
         .limit(1);
-
-      console.log(existingCartItem, "existingCartItem");
 
       if (existingCartItem) {
         // Update existing cart item
@@ -167,19 +165,19 @@ export const createCart = async (c: Context) => {
         });
       }
 
-      const discountPrice = await calculateDiscountPrice(
-        increment,
+      const itemDiscountPrice = calculatePriceAfterDiscount(
         product.price,
         product.discount || 0,
-        cart.discountPrice || 0
       );
+      const itemProfit = calculateProfit(product.price, product.discount || 0);
 
-      const profitFromDiscount = await calculateProfitFromDiscount(
-        increment,
-        product.price,
-        product.discount || 0,
-        cart.profitFromDiscount || 0
-      );
+      const discountPrice = increment
+        ? (cart.discountPrice || 0) + itemDiscountPrice
+        : (cart.discountPrice || 0) - itemDiscountPrice;
+
+      const profitFromDiscount = increment
+        ? (cart.profitFromDiscount || 0) + itemProfit
+        : (cart.profitFromDiscount || 0) - itemProfit;
 
       await trx
         .update(cartsTable)
@@ -262,8 +260,8 @@ export const createAnonCart = async (c: Context) => {
       .where(
         and(
           eq(colorImagesTable.id, colorImageId),
-          eq(colorImagesTable.productId, productId)
-        )
+          eq(colorImagesTable.productId, productId),
+        ),
       );
 
     if (!colorImage) {
@@ -289,7 +287,7 @@ export const createAnonCart = async (c: Context) => {
           deliveryCostId,
           discountPrice: calculatePriceAfterDiscount(
             product.price,
-            product.discount || 0
+            product.discount || 0,
           ),
           profitFromDiscount: product.discount
             ? calculateProfit(product.price, product.discount)
@@ -317,8 +315,8 @@ export const createAnonCart = async (c: Context) => {
             eq(cartItemsTable.productId, product.id),
             colorImageId
               ? eq(cartItemsTable.colorImageId, colorImageId)
-              : isNull(cartItemsTable.colorImageId)
-          )
+              : isNull(cartItemsTable.colorImageId),
+          ),
         )
         .limit(1);
 
@@ -346,19 +344,19 @@ export const createAnonCart = async (c: Context) => {
         });
       }
 
-      const discountPrice = await calculateDiscountPrice(
-        increment,
+      const itemDiscountPrice = calculatePriceAfterDiscount(
         product.price,
         product.discount || 0,
-        cart.discountPrice || 0
       );
+      const itemProfit = calculateProfit(product.price, product.discount || 0);
 
-      const profitFromDiscount = await calculateProfitFromDiscount(
-        increment,
-        product.price,
-        product.discount || 0,
-        cart.profitFromDiscount || 0
-      );
+      const discountPrice = increment
+        ? (cart.discountPrice || 0) + itemDiscountPrice
+        : (cart.discountPrice || 0) - itemDiscountPrice;
+
+      const profitFromDiscount = increment
+        ? (cart.profitFromDiscount || 0) + itemProfit
+        : (cart.profitFromDiscount || 0) - itemProfit;
 
       await trx
         .update(anonCartsTable)
@@ -390,7 +388,7 @@ export const anonCartLength = async (c: Context) => {
   const [result] = await db
     .select({
       totalItems: sql<number>`COALESCE(SUM(${cartItemsTable.quantity}), 0)`.as(
-        "totalItems"
+        "totalItems",
       ),
     })
     .from(anonCartsTable)
@@ -603,53 +601,11 @@ export const matchAnonCart = async (c: Context) => {
     message: "Cart replaced successfully",
   });
 };
-//  TODO : Convert This functions to raw sql (database side)
-
-const calculateDiscountPrice = async (
-  increment: boolean,
-  productPrice: number,
-  productDiscount: number,
-  previousDiscount: number
-): Promise<number> => {
-  const discountPriceResult = await db.execute<{ discount_price: string }>(
-    sql`SELECT calculate_discount_price(${productPrice}, ${productDiscount}) AS discount_price`
-  );
-
-  const calculatedDiscountPrice = parseFloat(
-    discountPriceResult.rows[0].discount_price
-  );
-
-  const finalDiscountPrice = increment
-    ? previousDiscount + calculatedDiscountPrice
-    : previousDiscount - calculatedDiscountPrice;
-
-  return finalDiscountPrice;
-};
-
-const calculateProfitFromDiscount = async (
-  increment: boolean,
-  productPrice: number,
-  productDiscount: number,
-  previousProfitFromDiscount: number
-): Promise<number> => {
-  const profitPriceResult = await db.execute<{ profit: string }>(
-    sql`SELECT calculate_profit(${productPrice}, ${productDiscount}) AS profit`
-  );
-
-  const calculatedProfit = parseFloat(profitPriceResult.rows[0].profit);
-
-  const finalProfitFromDiscount = increment
-    ? calculatedProfit + previousProfitFromDiscount
-    : previousProfitFromDiscount - calculatedProfit;
-
-  return finalProfitFromDiscount;
-};
-
 export const cartGetter = async <
-  T extends Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db
+  T extends Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db,
 >(
   trx: T,
-  userId: number
+  userId: number,
 ) => {
   // First, get the cart
   const [cart] = await trx
@@ -707,15 +663,15 @@ export const cartGetter = async <
     })
     .from(cartItemsTable)
     .where(
-      and(eq(cartItemsTable.cartId, cart.id), gt(cartItemsTable.quantity, 0))
+      and(eq(cartItemsTable.cartId, cart.id), gt(cartItemsTable.quantity, 0)),
     )
     .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
     .leftJoin(
       colorImagesTable,
       and(
         eq(colorImagesTable.id, cartItemsTable.colorImageId),
-        eq(colorImagesTable.productId, productsTable.id)
-      )
+        eq(colorImagesTable.productId, productsTable.id),
+      ),
     )
     .orderBy(desc(cartItemsTable.id));
 
@@ -728,10 +684,10 @@ export const cartGetter = async <
 };
 
 const anonCartGetter = async <
-  T extends Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db
+  T extends Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db,
 >(
   trx: T,
-  cartId: number // Renamed from userId for clarity since it's actually the cart ID
+  cartId: number, // Renamed from userId for clarity since it's actually the cart ID
 ) => {
   // First, get the anonymous cart
   const [cart] = await trx
@@ -789,15 +745,15 @@ const anonCartGetter = async <
     })
     .from(cartItemsTable)
     .where(
-      and(eq(cartItemsTable.cartId, cart.id), gt(cartItemsTable.quantity, 0))
+      and(eq(cartItemsTable.cartId, cart.id), gt(cartItemsTable.quantity, 0)),
     )
     .leftJoin(productsTable, eq(productsTable.id, cartItemsTable.productId))
     .leftJoin(
       colorImagesTable,
       and(
         eq(colorImagesTable.id, cartItemsTable.colorImageId),
-        eq(colorImagesTable.productId, productsTable.id)
-      )
+        eq(colorImagesTable.productId, productsTable.id),
+      ),
     )
     .orderBy(desc(cartItemsTable.id));
 

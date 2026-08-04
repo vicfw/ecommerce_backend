@@ -11,14 +11,17 @@ import {
 
 export const getBrands = async (c: Context) => {
   const search = c.req.query("search");
+  const q = c.req.query("q");
   const page = c.req.query("page");
   const limit = c.req.query("limit");
+  const perPage = c.req.query("perPage");
 
-  const pagination = paginationBuilder({ page, limit });
+  const pagination = paginationBuilder({ page, limit, perPage });
 
   let whereCondition = undefined;
-  if (search) {
-    whereCondition = ilike(brandsTable.name, `%${search}%`);
+  const searchTerm = search || q;
+  if (searchTerm) {
+    whereCondition = ilike(brandsTable.name, `%${searchTerm}%`);
   }
 
   const brands = await db
@@ -45,6 +48,33 @@ export const getBrands = async (c: Context) => {
       true
     )
   );
+};
+
+export const getBrandById = async (c: Context) => {
+  const { id } = c.req.param();
+
+  if (Number.isNaN(+id)) {
+    throw new HTTPException(404, {
+      message: "Brand not found.",
+    });
+  }
+
+  const [brand] = await db
+    .select()
+    .from(brandsTable)
+    .where(eq(brandsTable.id, +id));
+
+  if (!brand) {
+    throw new HTTPException(404, {
+      message: "Brand not found.",
+    });
+  }
+
+  return c.json({
+    success: true,
+    data: brand,
+    message: "Brand retrieved successfully.",
+  });
 };
 
 export const createBrand = async (c: Context) => {

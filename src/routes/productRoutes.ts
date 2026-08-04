@@ -11,9 +11,6 @@ products.post("/", protect, zValidator("json", validation.productSchema), (c) =>
 );
 products.get("/", (c) => product.getProducts(c));
 
-// development routes
-products.get("/seed", protect, (c) => product.seedProductsData(c));
-
 products.get("/:slug", (c) => product.getProduct(c));
 
 products.patch(

@@ -83,16 +83,22 @@ export const badgesSchema = z.object({
   icon: z.string(),
 });
 
-export const partialBadgeSchema = colorsSchema.partial();
+export const partialBadgeSchema = badgesSchema.partial();
 
 export const productSchema = z.object({
-  price: z.number(),
-  description: z.string(),
-  quantity: z.number(),
-  images: z.array(z.string()),
-  colors: z.array(z.number()).optional(),
+  prName: z.string().min(1),
+  enName: z.string().min(1),
+  price: z.number().nonnegative(),
+  description: z.string().min(1),
+  quantity: z.number().int().nonnegative(),
+  images: z.array(z.string()).min(1, "At least one image is required"),
   badges: z.array(z.number()).optional(),
-  defaultColorImage: z.string(),
+  weight: z.number().nonnegative().optional(),
+  discount: z.number().nonnegative().optional(),
+  categoryId: z.number().int().positive(),
+  brandId: z.number().int().positive().nullish(),
+  colorImageIds: z.array(z.number().int().positive()).optional(),
+  defaultColorImage: z.string().optional(),
 });
 
 export const partialProductSchema = productSchema.partial();
@@ -119,6 +125,15 @@ export const brandSchema = z.object({
 });
 
 export const partialBrandSchema = brandSchema.partial();
+
+export const colorImageSchema = z.object({
+  name: z.string().min(1),
+  colorImage: z.string().min(1),
+  images: z.array(z.string()).min(1, "At least one image is required"),
+  productId: z.number().int().positive().nullish(),
+});
+
+export const partialColorImageSchema = colorImageSchema.partial();
 
 export const commentSchema = z.object({
   userId: z.number(),

@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "dev": "bun run --hot src/server.ts"
+    "dev": "bun run --hot src/server.ts",
+    "db:seed": "bun run src/db/seed/seed.ts"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.2.1",

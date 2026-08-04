@@ -1,5 +1,3 @@
-import { ProductWithoutId } from "../../types/product.type";
-
 export const user = [
   {
     phoneNumber: "09362712519",
@@ -37,7 +35,7 @@ export const badge = [
   { title: "payed", icon: "icon3" },
 ];
 
-export const productsSeed: ProductWithoutId[] = [
+export const productsSeed = [
   {
     createdAt: new Date(),
     description: "",

@@ -6,7 +6,9 @@ import { HTTPException } from "hono/http-exception";
 import { buildCategoryTree } from "../utils/builCategoryTree";
 import { Category, CategoryWithRelations } from "../types";
 import {
+  cacheGet,
   cacheGetOrSet,
+  cacheSet,
   categoriesByLevelKey,
   categoriesListKey,
   categorySlugKey,
@@ -47,35 +49,35 @@ export const getCategoriesById = async (c: Context) => {
 export const getCategoryBySlug = async (c: Context) => {
   const { slug } = c.req.param();
   const ver = await getCategoriesVersion();
+  const key = categorySlugKey(ver, slug);
 
-  const payload = await cacheGetOrSet(categorySlugKey(ver, slug), async () => {
-    const category = await db.query.categoriesTable.findFirst({
-      where: eq(categoriesTable.slug, slug),
-    });
+  const cached = await cacheGet<{
+    success: true;
+    data: typeof categoriesTable.$inferSelect;
+    message: string;
+  }>(key);
 
-    if (!category) {
-      return { notFound: true as const };
-    }
+  if (cached.hit) {
+    return c.json(cached.value);
+  }
 
-    return {
-      notFound: false as const,
-      success: true,
-      data: category,
-      message: "Category retrieved successfully",
-    };
+  const category = await db.query.categoriesTable.findFirst({
+    where: eq(categoriesTable.slug, slug),
   });
 
-  if (payload.notFound) {
+  if (!category) {
     throw new HTTPException(404, {
       message: "Category not found.",
     });
   }
 
-  return c.json({
-    success: true,
-    data: payload.data,
-    message: payload.message,
-  });
+  const payload = {
+    success: true as const,
+    data: category,
+    message: "Category retrieved successfully",
+  };
+  await cacheSet(key, payload);
+  return c.json(payload);
 };
 
 // Create parent category (level 1)

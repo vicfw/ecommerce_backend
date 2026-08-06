@@ -3,9 +3,11 @@ import {
   CATALOG_TTL_SECONDS,
   CATALOG_VERSION_KEYS,
 } from "../constants/catalogCache";
-import { getRedis, withRedis } from "../lib/redis";
+import { withRedis } from "../lib/redis";
 
-export const hashQuery = (query: Record<string, string | undefined>): string => {
+export const hashQuery = (
+  query: Record<string, string | undefined>
+): string => {
   const sorted = Object.keys(query)
     .sort()
     .reduce<Record<string, string>>((acc, key) => {
@@ -61,27 +63,48 @@ export const brandProductsKey = (
   queryHash: string
 ) => `catalog:brand:products:${productsVer}:${slug}:${queryHash}`;
 
+type CacheLookup<T> =
+  | { hit: true; value: T }
+  | { hit: false };
+
+export async function cacheGet<T>(key: string): Promise<CacheLookup<T>> {
+  const result = await withRedis(async (client) => {
+    const raw = await client.get(key);
+    if (raw == null) return { hit: false as const };
+    try {
+      return { hit: true as const, value: JSON.parse(raw) as T };
+    } catch {
+      await client.del(key);
+      return { hit: false as const };
+    }
+  });
+
+  return result ?? { hit: false };
+}
+
+export async function cacheSet(
+  key: string,
+  value: unknown,
+  ttlSeconds: number = CATALOG_TTL_SECONDS
+): Promise<void> {
+  await withRedis(async (client) => {
+    await client.set(key, JSON.stringify(value), "EX", ttlSeconds);
+    return true;
+  });
+}
+
 export async function cacheGetOrSet<T>(
   key: string,
   loader: () => Promise<T>,
   ttlSeconds: number = CATALOG_TTL_SECONDS
 ): Promise<T> {
-  const cached = await withRedis(async (client) => {
-    const value = await client.get(key);
-    return value != null ? (JSON.parse(value) as T) : null;
-  });
-
-  if (cached != null) {
-    return cached;
+  const existing = await cacheGet<T>(key);
+  if (existing.hit) {
+    return existing.value;
   }
 
   const value = await loader();
-
-  await withRedis(async (client) => {
-    await client.set(key, JSON.stringify(value), "EX", ttlSeconds);
-    return true;
-  });
-
+  await cacheSet(key, value, ttlSeconds);
   return value;
 }
 
@@ -113,6 +136,3 @@ export async function invalidateBrands(): Promise<void> {
   await bumpVersion(CATALOG_VERSION_KEYS.brands);
   await bumpVersion(CATALOG_VERSION_KEYS.products);
 }
-
-// Re-export getRedis for callers that only need presence checks
-export { getRedis };

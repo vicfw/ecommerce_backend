@@ -1,7 +1,6 @@
 type RevalidatePayload = {
   tags?: string[];
   paths?: string[];
-  slug?: string;
 };
 
 let warnedMissingConfig = false;

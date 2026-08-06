@@ -10,7 +10,9 @@ import { colorImagesTable } from "../db/schema/colorImage";
 import { productsTable } from "../db/schema/products";
 import { builderFunc } from "../utils";
 import {
+  cacheGet,
   cacheGetOrSet,
+  cacheSet,
   getProductsVersion,
   hashQuery,
   productFiltersKey,
@@ -379,57 +381,49 @@ export const getProductFilters = async (c: Context) => {
 
 export const getProduct = async (c: Context) => {
   const params = c.req.param();
-  const slug = params.slug ?? params.id;
-  const isNumericId = /^\d+$/.test(slug);
+  const slugOrId = params.slug ?? params.id;
+  const isNumericId = /^\d+$/.test(slugOrId);
   const isAdmin = c.req.path.includes("/admin") || isNumericId;
 
-  const load = async () => {
-    const whereClause = isNumericId
-      ? eq(productsTable.id, +slug)
-      : eq(productsTable.slug, slug);
-
-    const [product] = await getProductWithRelations(whereClause);
-
-    if (!product) {
-      return {
-        success: false,
-        message: "Product not found.",
-        status: 404 as const,
-      };
-    }
-
-    return {
-      success: true,
-      data: product,
-      message: "Product retrieved successfully.",
-      status: 200 as const,
-    };
-  };
+  const whereClause = isNumericId
+    ? eq(productsTable.id, +slugOrId)
+    : eq(productsTable.slug, slugOrId);
 
   if (isAdmin) {
-    const result = await load();
-    if (result.status === 404) {
+    const [product] = await getProductWithRelations(whereClause);
+    if (!product) {
       return c.json(
-        { success: false, message: result.message },
+        { success: false, message: "Product not found." },
         404
       );
     }
     return c.json({
       success: true,
-      data: result.data,
-      message: result.message,
+      data: product,
+      message: "Product retrieved successfully.",
     });
   }
 
-  const key = productSlugKey(slug);
-  const result = await cacheGetOrSet(key, load);
-  if (result.status === 404) {
-    return c.json({ success: false, message: result.message }, 404);
+  const key = productSlugKey(slugOrId);
+  const cached = await cacheGet<unknown>(key);
+  if (cached.hit) {
+    return c.json({
+      success: true,
+      data: cached.value,
+      message: "Product retrieved successfully.",
+    });
   }
+
+  const [product] = await getProductWithRelations(whereClause);
+  if (!product) {
+    return c.json({ success: false, message: "Product not found." }, 404);
+  }
+
+  await cacheSet(key, product);
   return c.json({
     success: true,
-    data: result.data,
-    message: result.message,
+    data: product,
+    message: "Product retrieved successfully.",
   });
 };
 

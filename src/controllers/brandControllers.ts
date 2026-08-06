@@ -11,7 +11,9 @@ import {
 import {
   brandProductsKey,
   brandsListKey,
+  cacheGet,
   cacheGetOrSet,
+  cacheSet,
   getBrandsVersion,
   getProductsVersion,
   hashQuery,
@@ -167,7 +169,9 @@ export const updateBrand = async (c: Context) => {
   }
 
   await purgeAfterBrandWrite({
-    slugs: [existing?.slug, brand.slug].filter(Boolean) as string[],
+    slugs: [existing?.slug, brand.slug].filter(
+      (slug): slug is string => Boolean(slug)
+    ),
   });
 
   return c.json({
@@ -189,57 +193,49 @@ export const getProductsByBrandSlug = async (c: Context) => {
     hashQuery({ page, limit })
   );
 
-  type BrandProductsCache =
-    | { notFound: true }
-    | {
-        notFound: false;
-        body: ReturnType<typeof paginatedResponseBuilder>;
-      };
+  type BrandProductsBody = ReturnType<typeof paginatedResponseBuilder>;
 
-  const payload = await cacheGetOrSet<BrandProductsCache>(key, async () => {
-    const pagination = paginationBuilder({ page, limit });
+  const cached = await cacheGet<BrandProductsBody>(key);
+  if (cached.hit) {
+    return c.json(cached.value);
+  }
 
-    const [brand] = await db
-      .select()
-      .from(brandsTable)
-      .where(eq(brandsTable.slug, slug));
+  const pagination = paginationBuilder({ page, limit });
 
-    if (!brand) {
-      return { notFound: true };
-    }
+  const [brand] = await db
+    .select()
+    .from(brandsTable)
+    .where(eq(brandsTable.slug, slug));
 
-    const products = await db
-      .select()
-      .from(productsTable)
-      .where(eq(productsTable.brandId, brand.id))
-      .limit(pagination.limit)
-      .offset(pagination.skip);
-
-    const [total] = await db
-      .select({ count: count() })
-      .from(productsTable)
-      .where(eq(productsTable.brandId, brand.id));
-
-    const hasMore = pagination.page * pagination.limit < total.count;
-
-    return {
-      notFound: false,
-      body: paginatedResponseBuilder(
-        { products, brand },
-        `Products for brand ${brand.engName} retrieved successfully`,
-        total.count,
-        pagination.page,
-        hasMore,
-        true
-      ),
-    };
-  });
-
-  if (payload.notFound) {
+  if (!brand) {
     throw new HTTPException(404, {
       message: "Brand not found.",
     });
   }
 
-  return c.json(payload.body);
+  const products = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.brandId, brand.id))
+    .limit(pagination.limit)
+    .offset(pagination.skip);
+
+  const [total] = await db
+    .select({ count: count() })
+    .from(productsTable)
+    .where(eq(productsTable.brandId, brand.id));
+
+  const hasMore = pagination.page * pagination.limit < total.count;
+
+  const body = paginatedResponseBuilder(
+    { products, brand },
+    `Products for brand ${brand.engName} retrieved successfully`,
+    total.count,
+    pagination.page,
+    hasMore,
+    true
+  );
+
+  await cacheSet(key, body);
+  return c.json(body);
 };

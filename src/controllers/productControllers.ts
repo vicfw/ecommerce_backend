@@ -20,6 +20,7 @@ import {
   productSlugKey,
 } from "../utils/catalogCache";
 import { purgeAfterProductWrite } from "../utils/purgeCatalog";
+import { resolveProductPurgeTargets } from "../utils/resolveProductPurgeTargets";
 
 const slugify = (value: string) =>
   value
@@ -490,7 +491,16 @@ export const createProduct = async (c: Context) => {
     eq(productsTable.id, product.id)
   );
 
-  await purgeAfterProductWrite({ slugs: [product.slug] });
+  const { categorySlugs, brandSlugs } = await resolveProductPurgeTargets({
+    categoryIds: [product.categoryId],
+    brandIds: [product.brandId],
+  });
+
+  await purgeAfterProductWrite({
+    slugs: [product.slug],
+    categorySlugs,
+    brandSlugs,
+  });
 
   return c.json({
     success: true,
@@ -607,8 +617,15 @@ export const updateProduct = async (c: Context) => {
     eq(productsTable.id, product.id)
   );
 
+  const { categorySlugs, brandSlugs } = await resolveProductPurgeTargets({
+    categoryIds: [isExist.categoryId, product.categoryId],
+    brandIds: [isExist.brandId, product.brandId],
+  });
+
   await purgeAfterProductWrite({
     slugs: [isExist.slug, product.slug].filter(Boolean),
+    categorySlugs,
+    brandSlugs,
   });
 
   return c.json({
@@ -637,8 +654,16 @@ export const deleteProduct = async (c: Context) => {
       );
     }
 
+    const deleted = deletedProduct[0];
+    const { categorySlugs, brandSlugs } = await resolveProductPurgeTargets({
+      categoryIds: [deleted.categoryId],
+      brandIds: [deleted.brandId],
+    });
+
     await purgeAfterProductWrite({
-      slugs: [deletedProduct[0].slug].filter(Boolean),
+      slugs: [deleted.slug].filter(Boolean),
+      categorySlugs,
+      brandSlugs,
     });
 
     return c.json({

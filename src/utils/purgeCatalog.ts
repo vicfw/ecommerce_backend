@@ -30,8 +30,12 @@ async function purge(opts: {
 
 export async function purgeAfterProductWrite(opts: {
   slugs: string[];
+  categorySlugs?: string[];
+  brandSlugs?: string[];
 }): Promise<void> {
   const slugs = uniqueSlugs(opts.slugs);
+  const categorySlugs = uniqueSlugs(opts.categorySlugs);
+  const brandSlugs = uniqueSlugs(opts.brandSlugs);
   await purge({
     label: "purgeAfterProductWrite",
     invalidate: () => invalidateProducts(slugs),
@@ -39,7 +43,13 @@ export async function purgeAfterProductWrite(opts: {
       catalogTags.products,
       ...slugs.map((slug) => catalogTags.product(slug)),
     ],
-    paths: ["/", "/products", ...slugs.map((slug) => `/products/${slug}`)],
+    paths: [
+      "/",
+      "/products",
+      ...slugs.map((slug) => `/products/${slug}`),
+      ...categorySlugs.map((slug) => `/category/${slug}`),
+      ...brandSlugs.map((slug) => `/brands/${slug}`),
+    ],
   });
 }
 

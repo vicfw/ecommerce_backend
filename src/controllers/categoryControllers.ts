@@ -5,15 +5,27 @@ import { eq, and, inArray } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { buildCategoryTree } from "../utils/builCategoryTree";
 import { Category, CategoryWithRelations } from "../types";
+import {
+  cacheGetOrSet,
+  categoriesByLevelKey,
+  categoriesListKey,
+  categorySlugKey,
+  getCategoriesVersion,
+} from "../utils/catalogCache";
+import { purgeAfterCategoryWrite } from "../utils/purgeCatalog";
 
 export const getCategories = async (c: Context) => {
-  const categories = await db.query.categoriesTable.findMany();
-
-  return c.json({
-    success: true,
-    data: categories,
-    message: "Categories retrieved successfully",
+  const ver = await getCategoriesVersion();
+  const payload = await cacheGetOrSet(categoriesListKey(ver), async () => {
+    const categories = await db.query.categoriesTable.findMany();
+    return {
+      success: true,
+      data: categories,
+      message: "Categories retrieved successfully",
+    };
   });
+
+  return c.json(payload);
 };
 
 // Get categories by id
@@ -34,12 +46,26 @@ export const getCategoriesById = async (c: Context) => {
 
 export const getCategoryBySlug = async (c: Context) => {
   const { slug } = c.req.param();
+  const ver = await getCategoriesVersion();
 
-  const category = await db.query.categoriesTable.findFirst({
-    where: eq(categoriesTable.slug, slug),
+  const payload = await cacheGetOrSet(categorySlugKey(ver, slug), async () => {
+    const category = await db.query.categoriesTable.findFirst({
+      where: eq(categoriesTable.slug, slug),
+    });
+
+    if (!category) {
+      return { notFound: true as const };
+    }
+
+    return {
+      notFound: false as const,
+      success: true,
+      data: category,
+      message: "Category retrieved successfully",
+    };
   });
 
-  if (!category) {
+  if (payload.notFound) {
     throw new HTTPException(404, {
       message: "Category not found.",
     });
@@ -47,8 +73,8 @@ export const getCategoryBySlug = async (c: Context) => {
 
   return c.json({
     success: true,
-    data: category,
-    message: "Category retrieved successfully",
+    data: payload.data,
+    message: payload.message,
   });
 };
 
@@ -70,6 +96,8 @@ export const createParentCategory = async (c: Context) => {
       sortOrder: body.sortOrder ?? 0,
     })
     .returning();
+
+  await purgeAfterCategoryWrite({ slugs: [newCategory[0].slug] });
 
   return c.json({
     success: true,
@@ -118,6 +146,8 @@ export const createChildCategory = async (c: Context) => {
     })
     .returning();
 
+  await purgeAfterCategoryWrite({ slugs: [newCategory[0].slug] });
+
   return c.json({
     success: true,
     data: newCategory[0],
@@ -165,6 +195,8 @@ export const createSubChildCategory = async (c: Context) => {
     })
     .returning();
 
+  await purgeAfterCategoryWrite({ slugs: [newCategory[0].slug] });
+
   return c.json({
     success: true,
     data: newCategory[0],
@@ -189,6 +221,8 @@ export const createCategory = async (c: Context) => {
     })
     .returning();
 
+  await purgeAfterCategoryWrite({ slugs: [newCategory[0].slug] });
+
   return c.json({
     success: true,
     data: newCategory[0],
@@ -198,6 +232,12 @@ export const createCategory = async (c: Context) => {
 
 export const deleteCategory = async (c: Context) => {
   const { id } = c.req.param();
+
+  const [existing] = await db
+    .select()
+    .from(categoriesTable)
+    .where(eq(categoriesTable.id, +id))
+    .limit(1);
 
   const category = await db
     .delete(categoriesTable)
@@ -209,6 +249,10 @@ export const deleteCategory = async (c: Context) => {
     });
   }
 
+  await purgeAfterCategoryWrite({
+    slugs: existing?.slug ? [existing.slug] : [],
+  });
+
   return c.json({
     success: true,
     message: "Category deleted successfully.",
@@ -218,6 +262,8 @@ export const deleteCategory = async (c: Context) => {
 // Delete all categories
 export const deleteAllCategories = async (c: Context) => {
   const result = await db.delete(categoriesTable);
+
+  await purgeAfterCategoryWrite();
 
   return c.json({
     success: true,
@@ -267,6 +313,10 @@ export const updateCategory = async (c: Context) => {
     .where(eq(categoriesTable.id, +id))
     .returning();
 
+  await purgeAfterCategoryWrite({
+    slugs: [existing.slug, category.slug].filter(Boolean),
+  });
+
   return c.json({
     success: true,
     data: category,
@@ -285,16 +335,24 @@ export const getCategoriesByLevel = async (c: Context) => {
     });
   }
 
-  const categories = await db
-    .select()
-    .from(categoriesTable)
-    .where(eq(categoriesTable.level, levelNum));
+  const ver = await getCategoriesVersion();
+  const payload = await cacheGetOrSet(
+    categoriesByLevelKey(ver, levelNum),
+    async () => {
+      const categories = await db
+        .select()
+        .from(categoriesTable)
+        .where(eq(categoriesTable.level, levelNum));
 
-  return c.json({
-    success: true,
-    data: categories,
-    message: `Level ${levelNum} categories retrieved successfully`,
-  });
+      return {
+        success: true,
+        data: categories,
+        message: `Level ${levelNum} categories retrieved successfully`,
+      };
+    }
+  );
+
+  return c.json(payload);
 };
 
 // Get category full path (category → parent → grandparent) with children

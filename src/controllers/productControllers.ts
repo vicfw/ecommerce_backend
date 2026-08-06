@@ -9,6 +9,15 @@ import { categoriesTable } from "../db/schema/categories";
 import { colorImagesTable } from "../db/schema/colorImage";
 import { productsTable } from "../db/schema/products";
 import { builderFunc } from "../utils";
+import {
+  cacheGetOrSet,
+  getProductsVersion,
+  hashQuery,
+  productFiltersKey,
+  productListKey,
+  productSlugKey,
+} from "../utils/catalogCache";
+import { purgeAfterProductWrite } from "../utils/purgeCatalog";
 
 const slugify = (value: string) =>
   value
@@ -229,151 +238,198 @@ const getSortOrder = (sort?: string) => {
 
 export const getProducts = async (c: Context) => {
   const query = c.req.query();
-  const pagination = builderFunc.paginationBuilder(query);
+  const isAdmin = c.req.path.includes("/admin");
 
-  const conditions = await buildProductFilterConditions(query);
-  const whereClause =
-    conditions.length > 0 ? and(...conditions)! : sql`1=1`;
+  const load = async () => {
+    const pagination = builderFunc.paginationBuilder(query);
 
-  const products = await getProductWithRelations(whereClause)
-    .limit(pagination.limit)
-    .offset(pagination.skip)
-    .orderBy(getSortOrder(query.sort));
+    const conditions = await buildProductFilterConditions(query);
+    const whereClause =
+      conditions.length > 0 ? and(...conditions)! : sql`1=1`;
 
-  const allProductsCount =
-    conditions.length > 0
-      ? await db.$count(productsTable, whereClause)
-      : await db.$count(productsTable);
+    const products = await getProductWithRelations(whereClause)
+      .limit(pagination.limit)
+      .offset(pagination.skip)
+      .orderBy(getSortOrder(query.sort));
 
-  const hasMore = pagination.page * pagination.limit < allProductsCount;
+    const allProductsCount =
+      conditions.length > 0
+        ? await db.$count(productsTable, whereClause)
+        : await db.$count(productsTable);
 
-  return c.json(
-    builderFunc.paginatedResponseBuilder(
+    const hasMore = pagination.page * pagination.limit < allProductsCount;
+
+    return builderFunc.paginatedResponseBuilder(
       products,
       "Products retrieved successfully.",
       allProductsCount,
       pagination.page,
       hasMore,
       true
-    )
-  );
+    );
+  };
+
+  if (isAdmin) {
+    return c.json(await load());
+  }
+
+  const ver = await getProductsVersion();
+  const key = productListKey(ver, hashQuery(query));
+  return c.json(await cacheGetOrSet(key, load));
 };
 
 export const getProductFilters = async (c: Context) => {
   const query = c.req.query();
 
-  const categoryIds = await resolveCategoryIds(query);
-  const scopeCondition = categoryIds
-    ? inArray(productsTable.categoryId, categoryIds)
-    : sql`1=1`;
+  const load = async () => {
+    const categoryIds = await resolveCategoryIds(query);
+    const scopeCondition = categoryIds
+      ? inArray(productsTable.categoryId, categoryIds)
+      : sql`1=1`;
 
-  const [priceRange] = await db
-    .select({
-      minPrice: min(productsTable.price),
-      maxPrice: max(productsTable.price),
-    })
-    .from(productsTable)
-    .where(scopeCondition);
+    const [priceRange] = await db
+      .select({
+        minPrice: min(productsTable.price),
+        maxPrice: max(productsTable.price),
+      })
+      .from(productsTable)
+      .where(scopeCondition);
 
-  const brands = await db
-    .selectDistinct({
-      id: brandsTable.id,
-      name: brandsTable.name,
-      engName: brandsTable.engName,
-      slug: brandsTable.slug,
-    })
-    .from(brandsTable)
-    .innerJoin(productsTable, eq(productsTable.brandId, brandsTable.id))
-    .where(scopeCondition)
-    .orderBy(asc(brandsTable.name));
+    const brands = await db
+      .selectDistinct({
+        id: brandsTable.id,
+        name: brandsTable.name,
+        engName: brandsTable.engName,
+        slug: brandsTable.slug,
+      })
+      .from(brandsTable)
+      .innerJoin(productsTable, eq(productsTable.brandId, brandsTable.id))
+      .where(scopeCondition)
+      .orderBy(asc(brandsTable.name));
 
-  const badges = await db
-    .selectDistinct({
-      id: badgesTable.id,
-      title: badgesTable.title,
-      icon: badgesTable.icon,
-    })
-    .from(badgesTable)
-    .innerJoin(badgesToProducts, eq(badgesToProducts.badgeId, badgesTable.id))
-    .innerJoin(productsTable, eq(productsTable.id, badgesToProducts.productId))
-    .where(scopeCondition)
-    .orderBy(asc(badgesTable.title));
+    const badges = await db
+      .selectDistinct({
+        id: badgesTable.id,
+        title: badgesTable.title,
+        icon: badgesTable.icon,
+      })
+      .from(badgesTable)
+      .innerJoin(badgesToProducts, eq(badgesToProducts.badgeId, badgesTable.id))
+      .innerJoin(productsTable, eq(productsTable.id, badgesToProducts.productId))
+      .where(scopeCondition)
+      .orderBy(asc(badgesTable.title));
 
-  const colors = await db
-    .selectDistinct({
-      name: colorImagesTable.name,
-      colorImage: colorImagesTable.colorImage,
-    })
-    .from(colorImagesTable)
-    .innerJoin(productsTable, eq(productsTable.id, colorImagesTable.productId))
-    .where(scopeCondition)
-    .orderBy(asc(colorImagesTable.name));
+    const colors = await db
+      .selectDistinct({
+        name: colorImagesTable.name,
+        colorImage: colorImagesTable.colorImage,
+      })
+      .from(colorImagesTable)
+      .innerJoin(
+        productsTable,
+        eq(productsTable.id, colorImagesTable.productId)
+      )
+      .where(scopeCondition)
+      .orderBy(asc(colorImagesTable.name));
 
-  const categories = categoryIds
-    ? await db
-        .select({
-          id: categoriesTable.id,
-          name: categoriesTable.name,
-          slug: categoriesTable.slug,
-          level: categoriesTable.level,
-          parentId: categoriesTable.parentId,
-        })
-        .from(categoriesTable)
-        .where(inArray(categoriesTable.id, categoryIds))
-        .orderBy(asc(categoriesTable.sortOrder))
-    : await db
-        .select({
-          id: categoriesTable.id,
-          name: categoriesTable.name,
-          slug: categoriesTable.slug,
-          level: categoriesTable.level,
-          parentId: categoriesTable.parentId,
-        })
-        .from(categoriesTable)
-        .where(eq(categoriesTable.isActive, true))
-        .orderBy(asc(categoriesTable.sortOrder));
+    const categories = categoryIds
+      ? await db
+          .select({
+            id: categoriesTable.id,
+            name: categoriesTable.name,
+            slug: categoriesTable.slug,
+            level: categoriesTable.level,
+            parentId: categoriesTable.parentId,
+          })
+          .from(categoriesTable)
+          .where(inArray(categoriesTable.id, categoryIds))
+          .orderBy(asc(categoriesTable.sortOrder))
+      : await db
+          .select({
+            id: categoriesTable.id,
+            name: categoriesTable.name,
+            slug: categoriesTable.slug,
+            level: categoriesTable.level,
+            parentId: categoriesTable.parentId,
+          })
+          .from(categoriesTable)
+          .where(eq(categoriesTable.isActive, true))
+          .orderBy(asc(categoriesTable.sortOrder));
 
-  return c.json({
-    success: true,
-    data: {
-      brands,
-      badges,
-      colors,
-      categories,
-      priceRange: {
-        minPrice: priceRange?.minPrice ?? 0,
-        maxPrice: priceRange?.maxPrice ?? 0,
+    return {
+      success: true,
+      data: {
+        brands,
+        badges,
+        colors,
+        categories,
+        priceRange: {
+          minPrice: priceRange?.minPrice ?? 0,
+          maxPrice: priceRange?.maxPrice ?? 0,
+        },
       },
-    },
-    message: "Product filters retrieved successfully.",
-  });
+      message: "Product filters retrieved successfully.",
+    };
+  };
+
+  const ver = await getProductsVersion();
+  const key = productFiltersKey(ver, hashQuery(query));
+  return c.json(await cacheGetOrSet(key, load));
 };
 
 export const getProduct = async (c: Context) => {
   const params = c.req.param();
   const slug = params.slug ?? params.id;
+  const isNumericId = /^\d+$/.test(slug);
+  const isAdmin = c.req.path.includes("/admin") || isNumericId;
 
-  // Admin getOne uses numeric id; storefront uses slug
-  const whereClause = /^\d+$/.test(slug)
-    ? eq(productsTable.id, +slug)
-    : eq(productsTable.slug, slug);
+  const load = async () => {
+    const whereClause = isNumericId
+      ? eq(productsTable.id, +slug)
+      : eq(productsTable.slug, slug);
 
-  const [product] = await getProductWithRelations(whereClause);
+    const [product] = await getProductWithRelations(whereClause);
 
-  if (!product) {
-    return c.json(
-      {
+    if (!product) {
+      return {
         success: false,
         message: "Product not found.",
-      },
-      404
-    );
+        status: 404 as const,
+      };
+    }
+
+    return {
+      success: true,
+      data: product,
+      message: "Product retrieved successfully.",
+      status: 200 as const,
+    };
+  };
+
+  if (isAdmin) {
+    const result = await load();
+    if (result.status === 404) {
+      return c.json(
+        { success: false, message: result.message },
+        404
+      );
+    }
+    return c.json({
+      success: true,
+      data: result.data,
+      message: result.message,
+    });
   }
 
+  const key = productSlugKey(slug);
+  const result = await cacheGetOrSet(key, load);
+  if (result.status === 404) {
+    return c.json({ success: false, message: result.message }, 404);
+  }
   return c.json({
     success: true,
-    data: product,
-    message: "Product retrieved successfully.",
+    data: result.data,
+    message: result.message,
   });
 };
 
@@ -439,6 +495,8 @@ export const createProduct = async (c: Context) => {
   const [result] = await getProductWithRelations(
     eq(productsTable.id, product.id)
   );
+
+  await purgeAfterProductWrite({ slugs: [product.slug] });
 
   return c.json({
     success: true,
@@ -555,6 +613,10 @@ export const updateProduct = async (c: Context) => {
     eq(productsTable.id, product.id)
   );
 
+  await purgeAfterProductWrite({
+    slugs: [isExist.slug, product.slug].filter(Boolean),
+  });
+
   return c.json({
     success: true,
     data: result,
@@ -580,6 +642,10 @@ export const deleteProduct = async (c: Context) => {
         404
       );
     }
+
+    await purgeAfterProductWrite({
+      slugs: [deletedProduct[0].slug].filter(Boolean),
+    });
 
     return c.json({
       success: true,

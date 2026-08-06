@@ -1,4 +1,4 @@
-import { asc, eq, getTableColumns, sql, SQL } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, ilike, or, sql, SQL } from "drizzle-orm";
 import { Context } from "hono";
 import { db } from "../db";
 import { badgesTable } from "../db/schema/badges";
@@ -66,16 +66,31 @@ export const getProducts = async (c: Context) => {
   const query = c.req.query();
   const pagination = builderFunc.paginationBuilder(query);
 
-  const products = await getProductWithRelations(
-    query.categoryId
-      ? eq(productsTable.categoryId, +query.categoryId)
-      : sql`1=1`
-  )
+  const conditions: SQL[] = [];
+
+  if (query.categoryId) {
+    conditions.push(eq(productsTable.categoryId, +query.categoryId));
+  }
+
+  const searchTerm = query.search || query.q;
+  if (searchTerm) {
+    conditions.push(
+      or(
+        ilike(productsTable.prName, `%${searchTerm}%`),
+        ilike(productsTable.enName, `%${searchTerm}%`)
+      )!
+    );
+  }
+
+  const whereClause =
+    conditions.length > 0 ? and(...conditions)! : sql`1=1`;
+
+  const products = await getProductWithRelations(whereClause)
     .limit(pagination.limit)
     .offset(pagination.skip)
     .orderBy(asc(productsTable.id));
 
-  const allProductsCount = await db.$count(productsTable);
+  const allProductsCount = await db.$count(productsTable, whereClause);
 
   return c.json({
     success: true,

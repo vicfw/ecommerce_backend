@@ -1,4 +1,4 @@
-import { and, asc, eq, getTableColumns, ilike, or, sql, SQL } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, sql, SQL } from "drizzle-orm";
 import { Context } from "hono";
 import { db } from "../db";
 import { badgesTable } from "../db/schema/badges";
@@ -62,6 +62,9 @@ const getProductWithRelations = (whereClause: SQL<unknown>) => {
     .groupBy(productsTable.id);
 };
 
+const escapeIlikePattern = (value: string) =>
+  value.replace(/[\\%_]/g, (char) => `\\${char}`);
+
 export const getProducts = async (c: Context) => {
   const query = c.req.query();
   const pagination = builderFunc.paginationBuilder(query);
@@ -72,13 +75,14 @@ export const getProducts = async (c: Context) => {
     conditions.push(eq(productsTable.categoryId, +query.categoryId));
   }
 
-  const searchTerm = query.search || query.q;
+  const searchTerm = (query.search || query.q)?.trim();
   if (searchTerm) {
+    const pattern = `%${escapeIlikePattern(searchTerm)}%`;
     conditions.push(
-      or(
-        ilike(productsTable.prName, `%${searchTerm}%`),
-        ilike(productsTable.enName, `%${searchTerm}%`)
-      )!
+      sql`(
+        ${productsTable.prName} ILIKE ${pattern} ESCAPE '\\'
+        OR ${productsTable.enName} ILIKE ${pattern} ESCAPE '\\'
+      )`
     );
   }
 
@@ -90,7 +94,10 @@ export const getProducts = async (c: Context) => {
     .offset(pagination.skip)
     .orderBy(asc(productsTable.id));
 
-  const allProductsCount = await db.$count(productsTable, whereClause);
+  const allProductsCount =
+    conditions.length > 0
+      ? await db.$count(productsTable, whereClause)
+      : await db.$count(productsTable);
 
   return c.json({
     success: true,

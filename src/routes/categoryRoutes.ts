@@ -12,6 +12,9 @@ categories.get("/", (c) => category.getCategories(c));
 // Get categories by level
 categories.get("/level/:level", (c) => category.getCategoriesByLevel(c));
 
+// Get category by slug (must be before /:id)
+categories.get("/slug/:slug", (c) => category.getCategoryBySlug(c));
+
 // Get category full path (category → parent → grandparent)
 categories.get("/:id/path", (c) => category.getCategoryFullPath(c));
 

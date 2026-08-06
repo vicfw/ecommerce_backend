@@ -1,8 +1,11 @@
-import { and, asc, eq, getTableColumns, sql, SQL } from "drizzle-orm";
+import { and, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, max, min, sql, SQL } from "drizzle-orm";
 import { Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { db } from "../db";
 import { badgesTable } from "../db/schema/badges";
 import { badgesToProducts } from "../db/schema/badgesToProducts";
+import { brandsTable } from "../db/schema/brands";
+import { categoriesTable } from "../db/schema/categories";
 import { colorImagesTable } from "../db/schema/colorImage";
 import { productsTable } from "../db/schema/products";
 import { builderFunc } from "../utils";
@@ -13,6 +16,9 @@ const slugify = (value: string) =>
     .trim()
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-_]/g, "");
+
+const escapeIlikePattern = (value: string) =>
+  value.replace(/[\\%_]/g, (char) => `\\${char}`);
 
 const getProductWithRelations = (whereClause: SQL<unknown>) => {
   return db
@@ -62,17 +68,136 @@ const getProductWithRelations = (whereClause: SQL<unknown>) => {
     .groupBy(productsTable.id);
 };
 
-const escapeIlikePattern = (value: string) =>
-  value.replace(/[\\%_]/g, (char) => `\\${char}`);
+const getCategoryIdsIncludingDescendants = async (
+  categoryId: number
+): Promise<number[]> => {
+  const allCategories = await db
+    .select({
+      id: categoriesTable.id,
+      parentId: categoriesTable.parentId,
+    })
+    .from(categoriesTable);
 
-export const getProducts = async (c: Context) => {
-  const query = c.req.query();
-  const pagination = builderFunc.paginationBuilder(query);
+  const ids = new Set<number>([categoryId]);
+  let changed = true;
 
-  const conditions: SQL[] = [];
+  while (changed) {
+    changed = false;
+    for (const category of allCategories) {
+      if (
+        category.parentId != null &&
+        ids.has(category.parentId) &&
+        !ids.has(category.id)
+      ) {
+        ids.add(category.id);
+        changed = true;
+      }
+    }
+  }
+
+  return [...ids];
+};
+
+const resolveCategoryIds = async (query: Record<string, string>) => {
+  let categoryId: number | undefined;
 
   if (query.categoryId) {
-    conditions.push(eq(productsTable.categoryId, +query.categoryId));
+    const parsed = +query.categoryId;
+    if (Number.isNaN(parsed)) return null;
+    categoryId = parsed;
+  } else if (query.categorySlug) {
+    const [category] = await db
+      .select({ id: categoriesTable.id })
+      .from(categoriesTable)
+      .where(eq(categoriesTable.slug, query.categorySlug))
+      .limit(1);
+
+    if (!category) {
+      throw new HTTPException(404, { message: "Category not found." });
+    }
+    categoryId = category.id;
+  }
+
+  if (categoryId == null) return null;
+  return getCategoryIdsIncludingDescendants(categoryId);
+};
+
+const resolveBrandId = async (query: Record<string, string>) => {
+  if (query.brandId) {
+    const parsed = +query.brandId;
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  if (query.brand) {
+    const [brand] = await db
+      .select({ id: brandsTable.id })
+      .from(brandsTable)
+      .where(eq(brandsTable.slug, query.brand))
+      .limit(1);
+
+    if (!brand) {
+      throw new HTTPException(404, { message: "Brand not found." });
+    }
+    return brand.id;
+  }
+
+  return null;
+};
+
+const buildProductFilterConditions = async (
+  query: Record<string, string>
+): Promise<SQL[]> => {
+  const conditions: SQL[] = [];
+
+  const categoryIds = await resolveCategoryIds(query);
+  if (categoryIds) {
+    conditions.push(inArray(productsTable.categoryId, categoryIds));
+  }
+
+  const brandId = await resolveBrandId(query);
+  if (brandId != null) {
+    conditions.push(eq(productsTable.brandId, brandId));
+  }
+
+  if (query.minPrice && !Number.isNaN(+query.minPrice)) {
+    conditions.push(gte(productsTable.price, +query.minPrice));
+  }
+
+  if (query.maxPrice && !Number.isNaN(+query.maxPrice)) {
+    conditions.push(lte(productsTable.price, +query.maxPrice));
+  }
+
+  if (query.color) {
+    conditions.push(
+      exists(
+        db
+          .select({ id: colorImagesTable.id })
+          .from(colorImagesTable)
+          .where(
+            and(
+              eq(colorImagesTable.productId, productsTable.id),
+              ilike(colorImagesTable.name, query.color)
+            )
+          )
+      )
+    );
+  }
+
+  const badgeId = query.badgeId || query.badge;
+  if (badgeId && !Number.isNaN(+badgeId)) {
+    conditions.push(
+      exists(
+        db
+          .select({ id: badgesToProducts.id })
+          .from(badgesToProducts)
+          .where(
+            and(
+              eq(badgesToProducts.productId, productsTable.id),
+              eq(badgesToProducts.badgeId, +badgeId)
+            )
+          )
+      )
+    );
   }
 
   const searchTerm = (query.search || query.q)?.trim();
@@ -86,25 +211,141 @@ export const getProducts = async (c: Context) => {
     );
   }
 
+  return conditions;
+};
+
+const getSortOrder = (sort?: string) => {
+  switch (sort) {
+    case "price_asc":
+      return asc(productsTable.price);
+    case "price_desc":
+      return desc(productsTable.price);
+    case "newest":
+      return desc(productsTable.createdAt);
+    default:
+      return asc(productsTable.id);
+  }
+};
+
+export const getProducts = async (c: Context) => {
+  const query = c.req.query();
+  const pagination = builderFunc.paginationBuilder(query);
+
+  const conditions = await buildProductFilterConditions(query);
   const whereClause =
     conditions.length > 0 ? and(...conditions)! : sql`1=1`;
 
   const products = await getProductWithRelations(whereClause)
     .limit(pagination.limit)
     .offset(pagination.skip)
-    .orderBy(asc(productsTable.id));
+    .orderBy(getSortOrder(query.sort));
 
   const allProductsCount =
     conditions.length > 0
       ? await db.$count(productsTable, whereClause)
       : await db.$count(productsTable);
 
+  const hasMore = pagination.page * pagination.limit < allProductsCount;
+
+  return c.json(
+    builderFunc.paginatedResponseBuilder(
+      products,
+      "Products retrieved successfully.",
+      allProductsCount,
+      pagination.page,
+      hasMore,
+      true
+    )
+  );
+};
+
+export const getProductFilters = async (c: Context) => {
+  const query = c.req.query();
+
+  const categoryIds = await resolveCategoryIds(query);
+  const scopeCondition = categoryIds
+    ? inArray(productsTable.categoryId, categoryIds)
+    : sql`1=1`;
+
+  const [priceRange] = await db
+    .select({
+      minPrice: min(productsTable.price),
+      maxPrice: max(productsTable.price),
+    })
+    .from(productsTable)
+    .where(scopeCondition);
+
+  const brands = await db
+    .selectDistinct({
+      id: brandsTable.id,
+      name: brandsTable.name,
+      engName: brandsTable.engName,
+      slug: brandsTable.slug,
+    })
+    .from(brandsTable)
+    .innerJoin(productsTable, eq(productsTable.brandId, brandsTable.id))
+    .where(scopeCondition)
+    .orderBy(asc(brandsTable.name));
+
+  const badges = await db
+    .selectDistinct({
+      id: badgesTable.id,
+      title: badgesTable.title,
+      icon: badgesTable.icon,
+    })
+    .from(badgesTable)
+    .innerJoin(badgesToProducts, eq(badgesToProducts.badgeId, badgesTable.id))
+    .innerJoin(productsTable, eq(productsTable.id, badgesToProducts.productId))
+    .where(scopeCondition)
+    .orderBy(asc(badgesTable.title));
+
+  const colors = await db
+    .selectDistinct({
+      name: colorImagesTable.name,
+      colorImage: colorImagesTable.colorImage,
+    })
+    .from(colorImagesTable)
+    .innerJoin(productsTable, eq(productsTable.id, colorImagesTable.productId))
+    .where(scopeCondition)
+    .orderBy(asc(colorImagesTable.name));
+
+  const categories = categoryIds
+    ? await db
+        .select({
+          id: categoriesTable.id,
+          name: categoriesTable.name,
+          slug: categoriesTable.slug,
+          level: categoriesTable.level,
+          parentId: categoriesTable.parentId,
+        })
+        .from(categoriesTable)
+        .where(inArray(categoriesTable.id, categoryIds))
+        .orderBy(asc(categoriesTable.sortOrder))
+    : await db
+        .select({
+          id: categoriesTable.id,
+          name: categoriesTable.name,
+          slug: categoriesTable.slug,
+          level: categoriesTable.level,
+          parentId: categoriesTable.parentId,
+        })
+        .from(categoriesTable)
+        .where(eq(categoriesTable.isActive, true))
+        .orderBy(asc(categoriesTable.sortOrder));
+
   return c.json({
     success: true,
-    data: products,
-    page: pagination.page,
-    total: allProductsCount,
-    message: "Products retrieved successfully.",
+    data: {
+      brands,
+      badges,
+      colors,
+      categories,
+      priceRange: {
+        minPrice: priceRange?.minPrice ?? 0,
+        maxPrice: priceRange?.maxPrice ?? 0,
+      },
+    },
+    message: "Product filters retrieved successfully.",
   });
 };
 

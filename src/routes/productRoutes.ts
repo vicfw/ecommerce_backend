@@ -14,6 +14,7 @@ products.post(
   (c) => product.createProduct(c)
 );
 products.get("/", (c) => product.getProducts(c));
+products.get("/filters", (c) => product.getProductFilters(c));
 
 // Admin routes (must be before /:slug)
 products.get("/admin", protect, isAdmin, (c) => product.getProducts(c));

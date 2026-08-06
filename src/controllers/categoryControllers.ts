@@ -1,7 +1,7 @@
 import { Context } from "hono";
 import { db } from "../db";
 import { categoriesTable } from "../db/schema/categories";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { buildCategoryTree } from "../utils/builCategoryTree";
 import { Category, CategoryWithRelations } from "../types";
@@ -29,6 +29,26 @@ export const getCategoriesById = async (c: Context) => {
     success: true,
     data: category,
     message: `id ${numId} categories retrieved successfully`,
+  });
+};
+
+export const getCategoryBySlug = async (c: Context) => {
+  const { slug } = c.req.param();
+
+  const category = await db.query.categoriesTable.findFirst({
+    where: eq(categoriesTable.slug, slug),
+  });
+
+  if (!category) {
+    throw new HTTPException(404, {
+      message: "Category not found.",
+    });
+  }
+
+  return c.json({
+    success: true,
+    data: category,
+    message: "Category retrieved successfully",
   });
 };
 
@@ -324,11 +344,7 @@ export const getCategoryFullPath = async (c: Context) => {
           const nextLevel = await db
             .select()
             .from(categoriesTable)
-            .where(
-              currentLevel.length === 1
-                ? eq(categoriesTable.parentId, currentLevel[0])
-                : eq(categoriesTable.parentId, currentLevel[0])
-            );
+            .where(inArray(categoriesTable.parentId, currentLevel));
 
           if (nextLevel.length === 0) break;
 

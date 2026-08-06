@@ -87,7 +87,8 @@ export const getProducts = async (c: Context) => {
 };
 
 export const getProduct = async (c: Context) => {
-  const { slug } = c.req.param();
+  const params = c.req.param();
+  const slug = params.slug ?? params.id;
 
   // Admin getOne uses numeric id; storefront uses slug
   const whereClause = /^\d+$/.test(slug)

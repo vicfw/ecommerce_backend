@@ -1,65 +1,109 @@
-import { eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../db";
 import { usersTable } from "../db/schema/users";
 import { genToken } from "../utils";
+import { verifyUserOtp } from "../utils/verifyUserOtp";
 import { dateAddition } from "../utils/dateAddition";
 import { generateSMSCode } from "../utils/genSMSCode";
+import { refreshUserOtp } from "../utils/refreshUserOtp";
+import { paginationBuilder } from "../utils/builder/builderFunc";
+
+const sanitizeUser = (user: typeof usersTable.$inferSelect) => ({
+  id: user.id,
+  phoneNumber: user.phoneNumber,
+  name: user.name,
+  lastName: user.lastName,
+  isAdmin: user.isAdmin,
+  point: user.point,
+  createdAtdAt: user.createdAtdAt,
+  updatedAt: user.updatedAt,
+});
 
 export const getUsers = async (c: Context) => {
-  const users = await db.query.usersTable.findMany();
+  const url = c.req.query();
+  const pagination = paginationBuilder(url);
+
+  const users = await db.query.usersTable.findMany({
+    limit: pagination.limit,
+    offset: pagination.skip,
+    orderBy: (users, { desc }) => [desc(users.id)],
+  });
+
+  const [totalResult] = await db
+    .select({ count: count() })
+    .from(usersTable);
 
   return c.json({
     success: true,
-    data: users,
+    data: users.map(sanitizeUser),
+    total: totalResult.count,
     message: "Users fetched successfully",
+  });
+};
+
+export const getUserById = async (c: Context) => {
+  const { id } = c.req.param();
+
+  const user = await db.query.usersTable.findFirst({
+    where: eq(usersTable.id, +id),
+    with: {
+      addresses: true,
+    },
+  });
+
+  if (!user) {
+    throw new HTTPException(404, { message: "User not found" });
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      ...sanitizeUser(user),
+      addresses: user.addresses,
+    },
+    message: "User fetched successfully",
+  });
+};
+
+export const updateUserById = async (c: Context) => {
+  const { id } = c.req.param();
+  const body = await c.req.json();
+
+  const updateData: Partial<typeof usersTable.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+
+  if (body.isAdmin !== undefined) updateData.isAdmin = body.isAdmin;
+  if (body.point !== undefined) updateData.point = body.point;
+
+  const [updatedUser] = await db
+    .update(usersTable)
+    .set(updateData)
+    .where(eq(usersTable.id, +id))
+    .returning();
+
+  if (!updatedUser) {
+    throw new HTTPException(404, { message: "User not found" });
+  }
+
+  return c.json({
+    success: true,
+    data: sanitizeUser(updatedUser),
+    message: "User updated successfully",
   });
 };
 
 export const createUser = async (c: Context) => {
   const { phoneNumber } = await c.req.json();
 
-  const code = generateSMSCode();
-
-  const dateWithExtra2Minutes = dateAddition(2);
-
-  const hashedPassword = await Bun.password.hash(code.toString(), {
-    algorithm: "bcrypt",
-    cost: 4,
-  });
-
-  // Check for existing user
   const userExists = await db.query.usersTable.findFirst({
     where: eq(usersTable.phoneNumber, phoneNumber),
   });
 
   if (userExists) {
-    const codeValidUntil = new Date(userExists.codeValidUntil);
-    const presentTime = new Date(Date.now());
-
-    // if (codeValidUntil > presentTime) {
-    //   throw new HTTPException(400, {
-    //     cause: { field: "phoneNumber" },
-    //     message: "کد شما به تازگی ارسال شده است",
-    //   });
-    // }
-
-    // await prisma.user.update({
-    //   where: { phoneNumber },
-    //   data: {
-    //     code: hashedPassword,
-    //     codeValidUntil: dateWithExtra2Minutes,
-    //   },
-    // });
-
-    await db
-      .update(usersTable)
-      .set({
-        code: hashedPassword,
-        codeValidUntil: dateWithExtra2Minutes,
-      })
-      .where(eq(usersTable.phoneNumber, phoneNumber));
+    const code = await refreshUserOtp(phoneNumber);
 
     return c.json({
       success: true,
@@ -67,6 +111,14 @@ export const createUser = async (c: Context) => {
       message: "users code updated.",
     });
   }
+
+  const code = generateSMSCode();
+  const dateWithExtra2Minutes = dateAddition(2);
+
+  const hashedPassword = await Bun.password.hash(code.toString(), {
+    algorithm: "bcrypt",
+    cost: 4,
+  });
 
   const user = await db.insert(usersTable).values({
     phoneNumber,
@@ -89,46 +141,7 @@ export const createUser = async (c: Context) => {
 
 export const loginUser = async (c: Context) => {
   const { code, phoneNumber } = await c.req.json();
-
-  // Check for existing user
-  if (!code || !phoneNumber) {
-    throw new HTTPException(500, {
-      message: "Please provide an code and phone number",
-    });
-  }
-
-  const user = await db.query.usersTable.findFirst({
-    where: eq(usersTable.phoneNumber, phoneNumber),
-  });
-
-  if (!user) {
-    throw new HTTPException(401, {
-      message: "No user found with this phone number",
-    });
-  }
-
-  const codeValidUntil = new Date(user.codeValidUntil);
-  const presentTime = new Date(Date.now());
-
-  if (isNaN(codeValidUntil.getTime())) {
-    throw new HTTPException(400, {
-      message: "Invalid date format",
-    });
-  }
-
-  if (presentTime >= codeValidUntil) {
-    throw new HTTPException(401, {
-      message: "کد تایید منقضی شد",
-      cause: { field: "code" },
-    });
-  }
-
-  if (!(await Bun.password.verifySync(code, user.code, "bcrypt"))) {
-    throw new HTTPException(401, {
-      message: "کد تایید اشتباه است",
-      cause: { field: "code" },
-    });
-  }
+  const user = await verifyUserOtp(phoneNumber, code);
 
   const token = await genToken(user.id.toString());
 
@@ -217,12 +230,7 @@ export const getMe = async (c: Context) => {
 
   return c.json({
     success: true,
-    data: {
-      phoneNumber: user.phoneNumber,
-      name: user.name,
-      lastName: user.lastName,
-      id: user.id,
-    },
+    data: sanitizeUser(user),
     message: "User found successfully",
   });
 };

@@ -210,17 +210,42 @@ export const updateCategory = async (c: Context) => {
   const { id } = c.req.param();
   const body = await c.req.json();
 
-  const [category] = await db
-    .update(categoriesTable)
-    .set({ name: body.name, image: body.image })
-    .where(eq(categoriesTable.id, +id))
-    .returning();
+  const existing = await db.query.categoriesTable.findFirst({
+    where: eq(categoriesTable.id, +id),
+  });
 
-  if (!category) {
+  if (!existing) {
     throw new HTTPException(404, {
       message: "Category not found.",
     });
   }
+
+  const updateData: Record<string, unknown> = {
+    updatedAt: new Date(),
+  };
+
+  if (body.name !== undefined) updateData.name = body.name;
+  if (body.slug !== undefined) updateData.slug = body.slug;
+  if (body.description !== undefined) updateData.description = body.description;
+  if (body.isActive !== undefined) updateData.isActive = body.isActive;
+  if (body.sortOrder !== undefined) updateData.sortOrder = body.sortOrder;
+
+  if (existing.level === 1) {
+    if (body.parentImage !== undefined) updateData.parentImage = body.parentImage;
+    if (body.parentBanner !== undefined)
+      updateData.parentBanner = body.parentBanner;
+  } else {
+    if (body.image !== undefined) updateData.image = body.image;
+    if (body.color !== undefined) updateData.color = body.color;
+    if (body.icon !== undefined) updateData.icon = body.icon;
+    if (body.parentId !== undefined) updateData.parentId = body.parentId;
+  }
+
+  const [category] = await db
+    .update(categoriesTable)
+    .set(updateData)
+    .where(eq(categoriesTable.id, +id))
+    .returning();
 
   return c.json({
     success: true,

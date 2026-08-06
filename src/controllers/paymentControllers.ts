@@ -105,20 +105,20 @@ export const verifyPayment = async (c: Context) => {
         });
       }
 
-      // Prevent processing if order is already completed
+      // Prevent processing if order is already delivered or cancelled
       if (
-        existingOrder.status === "COMPLETED" ||
-        existingOrder.status === "CANCELLED"
+        existingOrder.status === "delivered" ||
+        existingOrder.status === "cancelled"
       ) {
         return c.json({
           success: false,
-          message: `Order is already ${existingOrder.status.toLowerCase()}`,
+          message: `Order is already ${existingOrder.status}`,
           data: verificationData,
         });
       }
 
-      // If order is already PROCESSING, return success without updating
-      if (existingOrder.status === "PROCESSING") {
+      // If order is already processing, return success without updating
+      if (existingOrder.status === "processing") {
         return c.json({
           success: true,
           message: "Payment was already processed successfully",
@@ -126,10 +126,10 @@ export const verifyPayment = async (c: Context) => {
         });
       }
 
-      // Update order status only if it's not already PROCESSING
+      // Update order status only if it's not already processing
       const [updatedOrder] = await db
         .update(ordersTable)
-        .set({ status: "PROCESSING" })
+        .set({ status: "processing" })
         .where(eq(ordersTable.id, orderId))
         .returning();
 

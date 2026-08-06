@@ -6,7 +6,7 @@ import { deliveryCostsTable } from "../db/schema/deliveryCosts";
 export const createDeliveryCost = async (c: Context) => {
   const { cost } = await c.req.json();
 
-  const deliveryCost = await db
+  const [created] = await db
     .insert(deliveryCostsTable)
     .values({
       cost,
@@ -15,7 +15,7 @@ export const createDeliveryCost = async (c: Context) => {
 
   return c.json({
     success: true,
-    data: deliveryCost,
+    data: created,
     message: "deliveryCost created successfully",
   });
 };
@@ -31,5 +31,18 @@ export const getDeliveryCost = async (c: Context) => {
     success: true,
     data: deliveryCost,
     message: "deliveryCost retrieved successfully",
+  });
+};
+
+export const getAllDeliveryCosts = async (c: Context) => {
+  const deliveryCosts = await db
+    .select()
+    .from(deliveryCostsTable)
+    .orderBy(desc(deliveryCostsTable.createdAt));
+
+  return c.json({
+    success: true,
+    data: deliveryCosts,
+    message: "Delivery costs retrieved successfully",
   });
 };

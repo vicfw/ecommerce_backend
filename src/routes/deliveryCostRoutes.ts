@@ -6,6 +6,10 @@ const deliveryCosts = new Hono();
 
 deliveryCosts.get("/", (c) => deliveryCost.getDeliveryCost(c));
 
+deliveryCosts.get("/all", protect, isAdmin, (c) =>
+  deliveryCost.getAllDeliveryCosts(c)
+);
+
 deliveryCosts.post("/", protect, isAdmin, (c) =>
   deliveryCost.createDeliveryCost(c)
 );

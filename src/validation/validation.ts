@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ORDER_STATUSES } from "../constants/orderStatus";
 
 export const addressSchema = z.object({
   address: z.string().min(6).max(100),
@@ -27,11 +28,6 @@ export const deleteAddressBulkSchema = z.object({
   addressIds: z
     .array(z.number().positive())
     .min(1, "At least one address ID is required"),
-});
-
-export const categorySchema = z.object({
-  name: z.string(),
-  image: z.string(),
 });
 
 // Parent category schema (level 1)
@@ -69,6 +65,38 @@ export const subchildCategorySchema = z.object({
   icon: z.string().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().optional(),
+});
+
+export const updateCategorySchema = z.object({
+  name: z.string().min(1).optional(),
+  slug: z.string().min(1).optional(),
+  description: z.string().optional(),
+  parentImage: z.string().optional(),
+  parentBanner: z.string().optional(),
+  image: z.string().optional(),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+  parentId: z.number().positive().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().optional(),
+});
+
+export const updateUserAdminSchema = z.object({
+  isAdmin: z.boolean().optional(),
+  point: z.number().int().min(0).optional(),
+});
+
+export const adminLoginSchema = z.object({
+  phoneNumber: z.string().min(1),
+  code: z.string().length(4),
+});
+
+export const adminRequestOtpSchema = z.object({
+  phoneNumber: z.string().min(1),
+});
+
+export const updateOrderStatusSchema = z.object({
+  status: z.enum(ORDER_STATUSES),
 });
 
 export const colorsSchema = z.object({

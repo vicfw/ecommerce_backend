@@ -11,3 +11,4 @@ export { default as paymentRoutes } from "./paymentRoutes";
 export { default as brandRoutes } from "./brandRoutes";
 export { default as colorImageRoutes } from "./colorImageRoutes";
 export { default as commentRoutes } from "./commentRoutes";
+export { default as adminRoutes } from "./adminRoutes";

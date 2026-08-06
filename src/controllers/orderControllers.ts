@@ -1,7 +1,8 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../db";
+import { isOrderStatus } from "../constants/orderStatus";
 import {
   joinAddressQuery,
   joinOrderItemQuery,
@@ -19,9 +20,9 @@ export const createOrder = async (c: Context) => {
   const user = c.get("user");
 
   const result = await db.transaction(async (trx) => {
-    const cart = await cartGetter(db, user.id);
+    const cart = await cartGetter(trx, user.id);
 
-    const [defaultAddress] = await db
+    const [defaultAddress] = await trx
       .select()
       .from(addressesTable)
       .where(
@@ -39,7 +40,7 @@ export const createOrder = async (c: Context) => {
       throw new HTTPException(400, { message: "Cart is empty" });
     }
 
-    const [order] = await db
+    const [order] = await trx
       .insert(ordersTable)
       .values({
         userId: user.id,
@@ -50,17 +51,16 @@ export const createOrder = async (c: Context) => {
       })
       .returning();
 
-    cart.cartItems.forEach(async (item) => {
-      await db.insert(orderItemsTable).values({
+    for (const item of cart.cartItems) {
+      await trx.insert(orderItemsTable).values({
         orderId: order.id,
         price: item.itemPrice,
         productId: item.productId,
         quantity: item.quantity,
       });
-    });
+    }
 
-    // Delete the cart after order is created
-    await db.delete(cartsTable).where(eq(cartsTable.userId, user.id));
+    await trx.delete(cartsTable).where(eq(cartsTable.userId, user.id));
 
     return order;
   });
@@ -95,7 +95,7 @@ export const getOrder = async (c: Context) => {
     .leftJoin(orderItemsTable, eq(ordersTable.id, orderItemsTable.orderId))
     .leftJoin(productsTable, eq(orderItemsTable.productId, productsTable.id))
     .where(eq(ordersTable.id, +id))
-    .groupBy(ordersTable.id);
+    .groupBy(ordersTable.id, usersTable.id, addressesTable.id);
 
   return c.json({
     success: true,
@@ -108,6 +108,14 @@ export const getOrders = async (c: Context) => {
   const status = c.req.query("status");
   const user = c.get("user");
 
+  const conditions = [eq(ordersTable.userId, user.id)];
+  if (status) {
+    if (!isOrderStatus(status)) {
+      throw new HTTPException(400, { message: "Invalid order status" });
+    }
+    conditions.push(eq(ordersTable.status, status));
+  }
+
   const orders = await db
     .select({
       id: ordersTable.id,
@@ -119,12 +127,7 @@ export const getOrders = async (c: Context) => {
       orderItem: joinOrderItemQuery(),
     })
     .from(ordersTable)
-    .where(
-      and(
-        eq(ordersTable.userId, user.id),
-        eq(ordersTable.status, status || ordersTable.status)
-      )
-    )
+    .where(and(...conditions))
     .leftJoin(orderItemsTable, eq(orderItemsTable.orderId, ordersTable.id))
     .leftJoin(productsTable, eq(orderItemsTable.productId, productsTable.id))
     .groupBy(ordersTable.id);
@@ -152,5 +155,115 @@ export const getStatusCount = async (c: Context) => {
     success: true,
     data: status,
     message: "status count retrieved successfully",
+  });
+};
+
+export const getAdminOrders = async (c: Context) => {
+  const url = c.req.query();
+  const status = url.status;
+  const page = +(url.page ?? 1);
+  const perPage = +(url.perPage ?? 10);
+  const skip = page > 1 ? (page - 1) * perPage : 0;
+
+  const conditions = [];
+  if (status && isOrderStatus(status)) {
+    conditions.push(eq(ordersTable.status, status));
+  }
+
+  const whereClause =
+    conditions.length > 0 ? and(...conditions) : undefined;
+
+  const sortField = url.sort === "createdAt" ? ordersTable.createdAt : ordersTable.id;
+  const orderByClause =
+    url.order === "ASC" ? asc(sortField) : desc(sortField);
+
+  const orders = await db
+    .select({
+      id: ordersTable.id,
+      status: ordersTable.status,
+      createdAt: ordersTable.createdAt,
+      updatedAt: ordersTable.updatedAt,
+      totalAmount: ordersTable.totalAmount,
+      profitFromDiscount: ordersTable.profitFromDiscount,
+      deliveryAmount: ordersTable.deliveryAmount,
+      user: joinUserQuery(),
+    })
+    .from(ordersTable)
+    .leftJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+    .where(whereClause)
+    .orderBy(orderByClause)
+    .limit(perPage)
+    .offset(skip);
+
+  const [totalResult] = await db
+    .select({ count: count() })
+    .from(ordersTable)
+    .where(whereClause);
+
+  return c.json({
+    success: true,
+    data: orders,
+    total: totalResult.count,
+    message: "Orders retrieved successfully",
+  });
+};
+
+export const getAdminOrder = async (c: Context) => {
+  const { id } = c.req.param();
+
+  const [order] = await db
+    .select({
+      id: ordersTable.id,
+      totalAmount: ordersTable.totalAmount,
+      profitFromDiscount: ordersTable.profitFromDiscount,
+      status: ordersTable.status,
+      deliveryAmount: ordersTable.deliveryAmount,
+      createdAt: ordersTable.createdAt,
+      updatedAt: ordersTable.updatedAt,
+      orderItem: joinOrderItemQuery(),
+      user: joinUserQuery(),
+      address: joinAddressQuery(),
+    })
+    .from(ordersTable)
+    .leftJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+    .leftJoin(addressesTable, eq(ordersTable.addressId, addressesTable.id))
+    .leftJoin(orderItemsTable, eq(ordersTable.id, orderItemsTable.orderId))
+    .leftJoin(productsTable, eq(orderItemsTable.productId, productsTable.id))
+    .where(eq(ordersTable.id, +id))
+    .groupBy(ordersTable.id, usersTable.id, addressesTable.id);
+
+  if (!order) {
+    throw new HTTPException(404, { message: "Order not found" });
+  }
+
+  return c.json({
+    success: true,
+    data: order,
+    message: "Order retrieved successfully",
+  });
+};
+
+export const updateAdminOrderStatus = async (c: Context) => {
+  const { id } = c.req.param();
+  const { status } = await c.req.json();
+
+  if (!isOrderStatus(status)) {
+    throw new HTTPException(400, { message: "Invalid order status" });
+  }
+
+  const [updatedOrder] = await db
+    .update(ordersTable)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(ordersTable.id, +id))
+    .returning();
+
+  if (!updatedOrder) {
+    throw new HTTPException(404, { message: "Order not found" });
+  }
+
+  return c.json({
+    success: true,
+    data: updatedOrder,
+    message: "Order status updated successfully",
   });
 };

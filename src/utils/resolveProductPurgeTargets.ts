@@ -2,19 +2,24 @@ import { inArray } from "drizzle-orm";
 import { db } from "../db";
 import { brandsTable } from "../db/schema/brands";
 import { categoriesTable } from "../db/schema/categories";
+import { purgeAfterProductWrite } from "./purgeCatalog";
 
-const unique = (values: (string | null | undefined)[]) => [
-  ...new Set(values.filter((value): value is string => Boolean(value))),
+const uniqueIds = (ids: (number | null | undefined)[]) => [
+  ...new Set(ids.filter((id): id is number => id != null)),
+];
+
+const uniqueSlugs = (slugs: (string | null | undefined)[]) => [
+  ...new Set(slugs.filter((slug): slug is string => Boolean(slug))),
 ];
 
 /**
- * Walk category parentId chain leaf → root so every PLP that can list
- * the product (via descendant matching) is path-revalidated.
+ * Walk category parentId chains leaf → root (one categories query)
+ * so every PLP that can list the product is path-revalidated.
  */
-export async function getCategoryAncestorSlugs(
-  categoryId: number | null | undefined
+async function resolveCategoryAncestorSlugs(
+  categoryIds: number[]
 ): Promise<string[]> {
-  if (categoryId == null) return [];
+  if (categoryIds.length === 0) return [];
 
   const allCategories = await db
     .select({
@@ -24,51 +29,66 @@ export async function getCategoryAncestorSlugs(
     })
     .from(categoriesTable);
 
-  const byId = new Map(allCategories.map((category) => [category.id, category]));
-  const slugs: string[] = [];
-  let current = byId.get(categoryId);
+  const byId = new Map(
+    allCategories.map((category) => [category.id, category])
+  );
+  const slugs = new Set<string>();
 
-  while (current) {
-    slugs.push(current.slug);
-    current =
-      current.parentId != null ? byId.get(current.parentId) : undefined;
+  for (const startId of categoryIds) {
+    const visited = new Set<number>();
+    let current = byId.get(startId);
+
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
+      slugs.add(current.slug);
+      current =
+        current.parentId != null ? byId.get(current.parentId) : undefined;
+    }
   }
 
-  return slugs;
+  return [...slugs];
 }
 
-export async function getCategoryAncestorSlugsForIds(
-  categoryIds: (number | null | undefined)[]
-): Promise<string[]> {
-  const ids = [...new Set(categoryIds.filter((id): id is number => id != null))];
-  if (ids.length === 0) return [];
-
-  const nested = await Promise.all(ids.map((id) => getCategoryAncestorSlugs(id)));
-  return unique(nested.flat());
-}
-
-export async function getBrandSlugs(
-  brandIds: (number | null | undefined)[]
-): Promise<string[]> {
-  const ids = [...new Set(brandIds.filter((id): id is number => id != null))];
-  if (ids.length === 0) return [];
+async function resolveBrandSlugs(brandIds: number[]): Promise<string[]> {
+  if (brandIds.length === 0) return [];
 
   const brands = await db
     .select({ slug: brandsTable.slug })
     .from(brandsTable)
-    .where(inArray(brandsTable.id, ids));
+    .where(inArray(brandsTable.id, brandIds));
 
-  return unique(brands.map((brand) => brand.slug));
+  return uniqueSlugs(brands.map((brand) => brand.slug));
 }
 
-export async function resolveProductPurgeTargets(opts: {
+async function resolveProductPurgeTargets(opts: {
   categoryIds?: (number | null | undefined)[];
   brandIds?: (number | null | undefined)[];
 }): Promise<{ categorySlugs: string[]; brandSlugs: string[] }> {
+  const categoryIds = uniqueIds(opts.categoryIds ?? []);
+  const brandIds = uniqueIds(opts.brandIds ?? []);
+
   const [categorySlugs, brandSlugs] = await Promise.all([
-    getCategoryAncestorSlugsForIds(opts.categoryIds ?? []),
-    getBrandSlugs(opts.brandIds ?? []),
+    resolveCategoryAncestorSlugs(categoryIds),
+    resolveBrandSlugs(brandIds),
   ]);
 
   return { categorySlugs, brandSlugs };
+}
+
+/** Resolve listing routes then purge Redis + storefront ISR. */
+export async function purgeProductWrite(opts: {
+  slugs: (string | null | undefined)[];
+  categoryIds?: (number | null | undefined)[];
+  brandIds?: (number | null | undefined)[];
+}): Promise<void> {
+  const { categorySlugs, brandSlugs } = await resolveProductPurgeTargets({
+    categoryIds: opts.categoryIds,
+    brandIds: opts.brandIds,
+  });
+
+  await purgeAfterProductWrite({
+    slugs: uniqueSlugs(opts.slugs),
+    categorySlugs,
+    brandSlugs,
+  });
 }

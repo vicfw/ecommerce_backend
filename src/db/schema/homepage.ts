@@ -13,6 +13,33 @@ export type HomepageProductSliderSection = {
   type: "product_slider";
   title: string;
   productIds: number[];
+  backgroundColor?: string;
+};
+
+export type HomepageStoryLinkItem = {
+  id: string;
+  imageUrl: string;
+  label: string;
+  href: string;
+};
+
+export type HomepageStoryLinksSection = {
+  id: string;
+  type: "story_links";
+  items: HomepageStoryLinkItem[];
+};
+
+export type HomepageImageSlide = {
+  id: string;
+  imageUrl: string;
+  href?: string;
+  alt?: string;
+};
+
+export type HomepageImageSliderSection = {
+  id: string;
+  type: "image_slider";
+  slides: HomepageImageSlide[];
 };
 
 export type HomepageContentBlock =
@@ -25,7 +52,11 @@ export type HomepageRowSection = {
   columns: HomepageContentBlock[];
 };
 
-export type HomepageSection = HomepageContentBlock | HomepageRowSection;
+export type HomepageSection =
+  | HomepageContentBlock
+  | HomepageRowSection
+  | HomepageStoryLinksSection
+  | HomepageImageSliderSection;
 
 export type HomepageLayout = {
   desktop: HomepageSection[];

@@ -184,6 +184,36 @@ export const homepageProductSliderSectionSchema = z.object({
   type: z.literal("product_slider"),
   title: z.string().min(1),
   productIds: z.array(z.number().int().positive()),
+  backgroundColor: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .optional(),
+});
+
+export const homepageStoryLinkItemSchema = z.object({
+  id: z.string().min(1),
+  imageUrl: z.string().min(1),
+  label: z.string().min(1),
+  href: z.string().min(1),
+});
+
+export const homepageStoryLinksSectionSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("story_links"),
+  items: z.array(homepageStoryLinkItemSchema).min(1),
+});
+
+export const homepageImageSlideSchema = z.object({
+  id: z.string().min(1),
+  imageUrl: z.string().min(1),
+  href: z.string().optional(),
+  alt: z.string().optional(),
+});
+
+export const homepageImageSliderSectionSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("image_slider"),
+  slides: z.array(homepageImageSlideSchema).min(1),
 });
 
 export const homepageContentBlockSchema = z.discriminatedUnion("type", [
@@ -201,6 +231,8 @@ export const homepageSectionSchema = z.discriminatedUnion("type", [
   homepageBannerSectionSchema,
   homepageProductSliderSectionSchema,
   homepageRowSectionSchema,
+  homepageStoryLinksSectionSchema,
+  homepageImageSliderSectionSchema,
 ]);
 
 export const updateHomepageSchema = z.object({

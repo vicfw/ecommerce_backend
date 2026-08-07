@@ -170,3 +170,41 @@ export const commentSchema = z.object({
   isApproved: z.boolean().optional(),
   image: z.string(),
 });
+
+export const homepageBannerSectionSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("banner"),
+  imageUrl: z.string().min(1),
+  href: z.string().optional(),
+  alt: z.string().optional(),
+});
+
+export const homepageProductSliderSectionSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("product_slider"),
+  title: z.string().min(1),
+  productIds: z.array(z.number().int().positive()),
+});
+
+export const homepageContentBlockSchema = z.discriminatedUnion("type", [
+  homepageBannerSectionSchema,
+  homepageProductSliderSectionSchema,
+]);
+
+export const homepageRowSectionSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("row"),
+  columns: z.array(homepageContentBlockSchema).min(1).max(4),
+});
+
+export const homepageSectionSchema = z.discriminatedUnion("type", [
+  homepageBannerSectionSchema,
+  homepageProductSliderSectionSchema,
+  homepageRowSectionSchema,
+]);
+
+export const updateHomepageSchema = z.object({
+  desktop: z.array(homepageSectionSchema),
+  mobile: z.array(homepageSectionSchema),
+});
+

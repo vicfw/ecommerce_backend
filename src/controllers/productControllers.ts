@@ -238,11 +238,58 @@ const getSortOrder = (sort?: string) => {
   }
 };
 
+const parseProductIds = (query: Record<string, string>): number[] | null => {
+  if (!query.ids) return null;
+
+  const seen = new Set<number>();
+  const ids: number[] = [];
+
+  for (const part of query.ids.split(",")) {
+    const id = +part.trim();
+    if (Number.isNaN(id) || id <= 0 || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+
+  return ids;
+};
+
 export const getProducts = async (c: Context) => {
   const query = c.req.query();
   const isAdmin = c.req.path.includes("/admin");
+  const requestedIds = parseProductIds(query);
 
   const load = async () => {
+    if (requestedIds) {
+      if (requestedIds.length === 0) {
+        return builderFunc.paginatedResponseBuilder(
+          [],
+          "Products retrieved successfully.",
+          0,
+          1,
+          false,
+          true
+        );
+      }
+
+      const products = await getProductWithRelations(
+        inArray(productsTable.id, requestedIds)
+      );
+      const byId = new Map(products.map((product) => [product.id, product]));
+      const ordered = requestedIds
+        .map((id) => byId.get(id))
+        .filter((product): product is (typeof products)[number] => !!product);
+
+      return builderFunc.paginatedResponseBuilder(
+        ordered,
+        "Products retrieved successfully.",
+        ordered.length,
+        1,
+        false,
+        true
+      );
+    }
+
     const pagination = builderFunc.paginationBuilder(query);
 
     const conditions = await buildProductFilterConditions(query);

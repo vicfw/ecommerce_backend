@@ -22,6 +22,7 @@ export const productsTable = pgTable("products", {
   weight: doublePrecision("weight").default(0),
   description: text("description"),
   quantity: integer("quantity").notNull(),
+  reservedQuantity: integer("reserved_quantity").notNull().default(0),
   images: text("images").array(),
   point: integer("point").default(0),
   categoryId: integer().notNull(),

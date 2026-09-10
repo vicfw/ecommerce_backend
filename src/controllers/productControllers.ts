@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, max, min, sql, SQL } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { getLogger } from "hono-pino";
 import { db } from "../db";
 import { badgesTable } from "../db/schema/badges";
 import { badgesToProducts } from "../db/schema/badgesToProducts";
@@ -20,6 +21,7 @@ import {
   productSlugKey,
 } from "../utils/catalogCache";
 import { purgeProductWrite } from "../utils/resolveProductPurgeTargets";
+import { availableStockSql } from "../utils/inventory";
 
 const slugify = (value: string) =>
   value
@@ -35,6 +37,7 @@ const getProductWithRelations = (whereClause: SQL<unknown>) => {
   return db
     .select({
       ...getTableColumns(productsTable),
+      availableQuantity: availableStockSql.as("availableQuantity"),
       badges: sql<string>`
         COALESCE(
           JSON_AGG(
@@ -597,7 +600,14 @@ export const updateProduct = async (c: Context) => {
     }
     if (price !== undefined) updateData.price = price;
     if (description !== undefined) updateData.description = description;
-    if (quantity !== undefined) updateData.quantity = quantity;
+    if (quantity !== undefined) {
+      if (quantity < (isExist.reservedQuantity ?? 0)) {
+        throw new HTTPException(400, {
+          message: "Quantity cannot be less than reserved stock",
+        });
+      }
+      updateData.quantity = quantity;
+    }
     if (weight !== undefined) updateData.weight = weight;
     if (discount !== undefined) updateData.discount = discount;
     if (categoryId !== undefined) updateData.categoryId = categoryId;
@@ -702,7 +712,7 @@ export const deleteProduct = async (c: Context) => {
       message: "Product deleted successfully.",
     });
   } catch (error) {
-    console.error("Delete product error:", error);
+    getLogger(c).error({ err: error, productId: +id }, "product_delete_failed");
     return c.json(
       {
         success: false,

@@ -3,6 +3,7 @@ import { db } from "../db";
 import { categoriesTable } from "../db/schema/categories";
 import { eq, and, inArray } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
+import { getLogger } from "hono-pino";
 import { buildCategoryTree } from "../utils/builCategoryTree";
 import { Category, CategoryWithRelations } from "../types";
 import {
@@ -432,7 +433,7 @@ export const getCategoryFullPath = async (c: Context) => {
       throw error;
     }
 
-    console.error("Error in getCategoryFullPath:", error);
+    getLogger(c).error({ err: error, categoryId: +c.req.param("id") }, "category_full_path_failed");
     throw new HTTPException(500, {
       message: "Internal server error while retrieving category.",
     });

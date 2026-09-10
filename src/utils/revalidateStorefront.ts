@@ -1,3 +1,5 @@
+import { logger } from "../lib/logger";
+
 type RevalidatePayload = {
   tags?: string[];
   paths?: string[];
@@ -15,9 +17,7 @@ export function revalidateStorefront(payload: RevalidatePayload): void {
 
   if (!frontendUrl || !secret) {
     if (!warnedMissingConfig) {
-      console.warn(
-        "[catalog-cache] FRONTEND_URL or REVALIDATE_SECRET unset — storefront revalidate skipped"
-      );
+      logger.warn("storefront_revalidate_config_unset");
       warnedMissingConfig = true;
     }
     return;
@@ -33,6 +33,6 @@ export function revalidateStorefront(payload: RevalidatePayload): void {
     },
     body: JSON.stringify(payload),
   }).catch((err) => {
-    console.error("[catalog-cache] storefront revalidate failed:", err);
+    logger.error({ err }, "storefront_revalidate_failed");
   });
 }

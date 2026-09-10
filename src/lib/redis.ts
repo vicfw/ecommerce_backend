@@ -1,4 +1,5 @@
 import Redis from "ioredis";
+import { logger } from "./logger";
 
 let redis: Redis | null = null;
 let warnedMissingUrl = false;
@@ -10,7 +11,7 @@ async function ensureConnected(client: Redis): Promise<void> {
     connecting = client
       .connect()
       .catch((err) => {
-        console.error("[catalog-cache] Redis connect failed:", err);
+        logger.error({ err }, "redis_connect_failed");
       })
       .finally(() => {
         connecting = null;
@@ -23,9 +24,7 @@ export const getRedis = (): Redis | null => {
   const url = process.env.REDIS_URL;
   if (!url) {
     if (!warnedMissingUrl) {
-      console.warn(
-        "[catalog-cache] REDIS_URL unset — catalog Redis cache disabled"
-      );
+      logger.warn("redis_url_unset");
       warnedMissingUrl = true;
     }
     return null;
@@ -38,7 +37,7 @@ export const getRedis = (): Redis | null => {
       enableOfflineQueue: false,
     });
     redis.on("error", (err) => {
-      console.error("[catalog-cache] Redis error:", err.message);
+      logger.error({ err }, "redis_error");
     });
   }
 
@@ -56,7 +55,7 @@ export const withRedis = async <T>(
     if (client.status !== "ready") return null;
     return await fn(client);
   } catch (err) {
-    console.error("[catalog-cache] Redis operation failed:", err);
+    logger.error({ err }, "redis_operation_failed");
     return null;
   }
 };

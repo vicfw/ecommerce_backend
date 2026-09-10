@@ -1,4 +1,5 @@
 import { catalogTags } from "../constants/catalogCache";
+import { logger } from "../lib/logger";
 import {
   invalidateBrands,
   invalidateCategories,
@@ -24,7 +25,7 @@ async function purge(opts: {
     await opts.invalidate();
     revalidateStorefront({ tags: opts.tags, paths: opts.paths });
   } catch (err) {
-    console.error(`[catalog-cache] ${opts.label} failed:`, err);
+    logger.error({ err, label: opts.label }, "catalog_purge_failed");
   }
 }
 

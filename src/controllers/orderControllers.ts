@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { getLogger } from "hono-pino";
 import { db } from "../db";
 import { isOrderStatus } from "../constants/orderStatus";
 import {
@@ -14,10 +15,19 @@ import { orderItemsTable } from "../db/schema/orderItems";
 import { ordersTable } from "../db/schema/orders";
 import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
+import {
+  applyInventoryForOrderStatus,
+  expireStaleReservations,
+  groupQuantitiesByProductId,
+  reservationExpiryDate,
+  reserve,
+} from "../utils/inventory";
 import { cartGetter } from "./cartControllers";
 
 export const createOrder = async (c: Context) => {
   const user = c.get("user");
+
+  await expireStaleReservations();
 
   const result = await db.transaction(async (trx) => {
     const cart = await cartGetter(trx, user.id);
@@ -40,6 +50,9 @@ export const createOrder = async (c: Context) => {
       throw new HTTPException(400, { message: "Cart is empty" });
     }
 
+    const quantities = groupQuantitiesByProductId(cart.cartItems);
+    await reserve(trx, quantities);
+
     const [order] = await trx
       .insert(ordersTable)
       .values({
@@ -48,6 +61,9 @@ export const createOrder = async (c: Context) => {
         totalAmount: cart.discountPrice || 0,
         profitFromDiscount: cart.profitFromDiscount,
         deliveryAmount: cart.deliveryCost?.cost || 0,
+        status: "pending",
+        inventoryStatus: "reserved",
+        reservationExpiresAt: reservationExpiryDate(),
       })
       .returning();
 
@@ -64,6 +80,11 @@ export const createOrder = async (c: Context) => {
 
     return order;
   });
+
+  getLogger(c).info(
+    { orderId: result.id, userId: user.id },
+    "order_created"
+  );
 
   return c.json({
     success: true,
@@ -181,6 +202,7 @@ export const getAdminOrders = async (c: Context) => {
     .select({
       id: ordersTable.id,
       status: ordersTable.status,
+      inventoryStatus: ordersTable.inventoryStatus,
       createdAt: ordersTable.createdAt,
       updatedAt: ordersTable.updatedAt,
       totalAmount: ordersTable.totalAmount,
@@ -217,6 +239,8 @@ export const getAdminOrder = async (c: Context) => {
       totalAmount: ordersTable.totalAmount,
       profitFromDiscount: ordersTable.profitFromDiscount,
       status: ordersTable.status,
+      inventoryStatus: ordersTable.inventoryStatus,
+      reservationExpiresAt: ordersTable.reservationExpiresAt,
       deliveryAmount: ordersTable.deliveryAmount,
       createdAt: ordersTable.createdAt,
       updatedAt: ordersTable.updatedAt,
@@ -251,15 +275,40 @@ export const updateAdminOrderStatus = async (c: Context) => {
     throw new HTTPException(400, { message: "Invalid order status" });
   }
 
-  const [updatedOrder] = await db
-    .update(ordersTable)
-    .set({ status, updatedAt: new Date() })
-    .where(eq(ordersTable.id, +id))
-    .returning();
+  const updatedOrder = await db.transaction(async (trx) => {
+    const [order] = await trx
+      .select()
+      .from(ordersTable)
+      .where(eq(ordersTable.id, +id))
+      .for("update");
 
-  if (!updatedOrder) {
-    throw new HTTPException(404, { message: "Order not found" });
-  }
+    if (!order) {
+      throw new HTTPException(404, { message: "Order not found" });
+    }
+
+    const inventoryStatus = await applyInventoryForOrderStatus(
+      trx,
+      order,
+      status
+    );
+
+    const [updated] = await trx
+      .update(ordersTable)
+      .set({ status, inventoryStatus, updatedAt: new Date() })
+      .where(eq(ordersTable.id, +id))
+      .returning();
+
+    if (!updated) {
+      throw new HTTPException(404, { message: "Order not found" });
+    }
+
+    getLogger(c).info(
+      { orderId: order.id, from: order.status, to: status },
+      "order_status_updated"
+    );
+
+    return updated;
+  });
 
   return c.json({
     success: true,

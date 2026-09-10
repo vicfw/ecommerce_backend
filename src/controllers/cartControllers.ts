@@ -12,6 +12,76 @@ import {
   calculatePriceAfterDiscount,
   calculateProfit,
 } from "../utils/calculateProfit";
+import {
+  availableStock,
+  expireStaleReservations,
+  quantityLimitError,
+  type DbOrTrx,
+  type ProductStock,
+} from "../utils/inventory";
+
+const cartProductQuantity = async (
+  trx: DbOrTrx,
+  cartId: number,
+  productId: number,
+) => {
+  const [row] = await trx
+    .select({
+      total: sql<number>`COALESCE(SUM(${cartItemsTable.quantity}), 0)`,
+    })
+    .from(cartItemsTable)
+    .where(
+      and(
+        eq(cartItemsTable.cartId, cartId),
+        eq(cartItemsTable.productId, productId),
+      ),
+    );
+
+  return Number(row?.total ?? 0);
+};
+
+const assertCartIncreaseFitsStock = async (
+  trx: DbOrTrx,
+  cartId: number | null,
+  productId: number,
+) => {
+  const [product] = await trx
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.id, productId));
+
+  if (!product) {
+    throw new HTTPException(400, {
+      message: "Product not found",
+      cause: "product not found",
+    });
+  }
+
+  const currentQty = cartId
+    ? await cartProductQuantity(trx, cartId, product.id)
+    : 0;
+
+  if (currentQty + 1 > availableStock(product)) {
+    throw quantityLimitError();
+  }
+};
+
+const withAvailableQuantity = <
+  T extends {
+    product: (ProductStock & Record<string, unknown>) | null;
+  },
+>(
+  items: T[],
+) =>
+  items.map((item) => ({
+    ...item,
+    product: item.product
+      ? {
+          ...item.product,
+          availableQuantity: availableStock(item.product),
+        }
+      : item.product,
+  }));
 
 export const getCart = async (c: Context) => {
   const user = c.get("user");
@@ -52,7 +122,8 @@ export const createCart = async (c: Context) => {
     await c.req.json();
   const user = c.get("user");
 
-  // Check if the product exists and has a valid quantity
+  await expireStaleReservations();
+
   const [product] = await db
     .select()
     .from(productsTable)
@@ -62,13 +133,6 @@ export const createCart = async (c: Context) => {
     throw new HTTPException(400, {
       message: "Product not found",
       cause: "product not found",
-    });
-  }
-
-  if (!product?.quantity || product.quantity < 0) {
-    throw new HTTPException(400, {
-      message: "Product quantity is not enough",
-      cause: "quantity limit",
     });
   }
 
@@ -100,6 +164,8 @@ export const createCart = async (c: Context) => {
       .limit(1);
 
     if (!cart) {
+      await assertCartIncreaseFitsStock(trx, null, product.id);
+
       const [createdCart] = await trx
         .insert(cartsTable)
         .values({
@@ -140,6 +206,10 @@ export const createCart = async (c: Context) => {
           ),
         )
         .limit(1);
+
+      if (!existingCartItem || increment) {
+        await assertCartIncreaseFitsStock(trx, cart.id, product.id);
+      }
 
       if (existingCartItem) {
         // Update existing cart item
@@ -232,7 +302,8 @@ export const createAnonCart = async (c: Context) => {
     await c.req.json();
   const { anoncartid } = await c.req.header();
 
-  // Check if the product exists and has a valid quantity
+  await expireStaleReservations();
+
   const [product] = await db
     .select()
     .from(productsTable)
@@ -242,13 +313,6 @@ export const createAnonCart = async (c: Context) => {
     throw new HTTPException(400, {
       message: "Product not found",
       cause: "product not found",
-    });
-  }
-
-  if (!product?.quantity || product.quantity < 0) {
-    throw new HTTPException(400, {
-      message: "Product quantity is not enough",
-      cause: "quantity limit",
     });
   }
 
@@ -280,6 +344,8 @@ export const createAnonCart = async (c: Context) => {
       .limit(1);
 
     if (!cart) {
+      await assertCartIncreaseFitsStock(trx, null, product.id);
+
       const [createdCart] = await trx
         .insert(anonCartsTable)
         .values({
@@ -319,6 +385,10 @@ export const createAnonCart = async (c: Context) => {
           ),
         )
         .limit(1);
+
+      if (!existingCartItem || increment) {
+        await assertCartIncreaseFitsStock(trx, cart.id, product.id);
+      }
 
       if (existingCartItem) {
         // Update existing cart item
@@ -648,6 +718,7 @@ export const cartGetter = async <
       product: {
         id: productsTable.id,
         quantity: productsTable.quantity,
+        reservedQuantity: productsTable.reservedQuantity,
         prName: productsTable.prName,
         enName: productsTable.enName,
         slug: productsTable.slug,
@@ -679,7 +750,7 @@ export const cartGetter = async <
   return {
     ...cart,
     deliveryCost: deliveryCost || {},
-    cartItems: cartItems || [],
+    cartItems: withAvailableQuantity(cartItems || []),
   };
 };
 
@@ -730,6 +801,7 @@ const anonCartGetter = async <
       product: {
         id: productsTable.id,
         quantity: productsTable.quantity,
+        reservedQuantity: productsTable.reservedQuantity,
         prName: productsTable.prName,
         enName: productsTable.enName,
         slug: productsTable.slug,
@@ -761,6 +833,6 @@ const anonCartGetter = async <
   return {
     ...cart,
     deliveryCost: deliveryCost || {},
-    cartItems: cartItems || [],
+    cartItems: withAvailableQuantity(cartItems || []),
   };
 };

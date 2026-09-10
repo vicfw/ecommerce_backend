@@ -13,6 +13,7 @@ import { commentsTable } from "../db/schema/comments";
 import { ordersTable } from "../db/schema/orders";
 import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
+import { availableStockSql } from "../utils/inventory";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -103,11 +104,12 @@ export const getDashboard = async (c: Context) => {
     .select({
       id: productsTable.id,
       prName: productsTable.prName,
-      quantity: productsTable.quantity,
+      quantity: availableStockSql,
+      reservedQuantity: productsTable.reservedQuantity,
     })
     .from(productsTable)
-    .where(lte(productsTable.quantity, LOW_STOCK_THRESHOLD))
-    .orderBy(productsTable.quantity)
+    .where(lte(availableStockSql, LOW_STOCK_THRESHOLD))
+    .orderBy(availableStockSql)
     .limit(10);
 
   const recentOrders = await db

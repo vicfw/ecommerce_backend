@@ -1,5 +1,7 @@
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { getLogger } from "hono-pino";
+import { logger as rootLogger } from "../lib/logger";
 
 type DatabaseError = {
   code: string;
@@ -9,12 +11,19 @@ type DatabaseError = {
   column?: string;
 };
 
+const reqLogger = (c: Context) => getLogger(c) ?? rootLogger;
+
 // Error Handler
 export const errorHandler = (c: Context) => {
   const err = c.error;
+  const log = reqLogger(c);
 
   // Handle HTTP Exceptions
   if (err instanceof HTTPException) {
+    if (err.status >= 500) {
+      log.error({ err, status: err.status }, err.message);
+    }
+
     const errorData = {
       success: false,
       message: err.message,
@@ -78,12 +87,14 @@ export const errorHandler = (c: Context) => {
       );
     }
 
-    // Log database errors
-    console.error("Database error:", {
-      code: dbError.code,
-      message: dbError.message,
-      detail: dbError.detail,
-    });
+    log.error(
+      {
+        code: dbError.code,
+        message: dbError.message,
+        detail: dbError.detail,
+      },
+      "database_error"
+    );
 
     return c.json(
       {
@@ -95,8 +106,7 @@ export const errorHandler = (c: Context) => {
     );
   }
 
-  // Handle other unexpected errors
-  console.error("Unexpected error:", err);
+  log.error({ err }, "unexpected_error");
   return c.json(
     {
       success: false,

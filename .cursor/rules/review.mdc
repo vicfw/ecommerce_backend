@@ -1,0 +1,43 @@
+---
+description: review - Review current session changes to fix bugs and remove duplicate/unused code
+alwaysApply: true
+---
+
+# Review Command
+
+When the user message is **"review"** (or **"reivew"**), or clearly asks to review current session/work/changes, treat it as this instruction:
+
+> Review current session changes to fix possible bugs, remove duplicate or unused code.
+
+## Workspace scope (all projects)
+
+This workspace has **three separate git repos**. Always review **all of them**, not just the repo with the focused file:
+
+1. `ecommerce_admin`
+2. `ecommerce_backend`
+3. `ecommerce_frontend`
+
+Run `git status` and `git diff` in **each** repo above. Include every modified/untracked file from the session across admin, backend, and frontend.
+
+## Session scope
+
+Review **only changes made in this conversation session** (uncommitted edits). Do not audit unrelated existing code.
+
+## Goals
+
+1. **Fix possible bugs** — logic errors, edge cases, missing null checks, race conditions, type mismatches
+2. **Remove duplicate code** — consolidate repeated logic; extract shared helpers only when clearly warranted
+3. **Remove unused code** — dead imports, unreachable branches, unused variables/functions
+
+## Process
+
+1. Inspect git diff / session changes in **all three projects**
+2. Report findings grouped by project, then by severity (bugs first, then cleanup)
+3. Apply fixes by default unless the user asked for review-only
+4. Keep changes minimal — no unrelated refactors
+
+## Do not
+
+- Limit the review to a single repo (e.g. backend only)
+- Expand scope beyond session changes
+- Over-engineer or introduce unnecessary abstractions

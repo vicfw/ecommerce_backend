@@ -1,8 +1,9 @@
 import { v2 as cloudinary } from "cloudinary";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
+import { pinoLogger } from "hono-pino";
+import { logger } from "./lib/logger";
 import { errorHandler, notFound } from "./middlewares";
 import { limiter } from "./middlewares/rateLimitMiddleware";
 import {
@@ -22,10 +23,38 @@ import {
   adminRoutes,
   homepageRoutes,
 } from "./routes";
+import { expireStaleReservations } from "./utils/inventory";
 
 const app = new Hono().basePath("/api/v1");
 
-app.use("*", logger(), prettyJSON());
+app.use(
+  "*",
+  pinoLogger({
+    pino: logger,
+    nodeRuntime: true,
+    http: {
+      reqId: () => crypto.randomUUID(),
+      onReqBindings: (c) => ({
+        req: {
+          url: c.req.path,
+          method: c.req.method,
+        },
+      }),
+      onResBindings: (c) => ({
+        res: {
+          status: c.res.status,
+        },
+      }),
+      onResLevel: (c) => {
+        const status = c.res.status;
+        if (status >= 500) return "error";
+        if (status >= 400 && status !== 404) return "warn";
+        return "info";
+      },
+    },
+  }),
+);
+app.use("*", prettyJSON());
 
 // Cors
 app.use(
@@ -33,7 +62,7 @@ app.use(
   cors({
     origin: "*",
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  })
+  }),
 );
 
 // Rate Limiter
@@ -75,7 +104,23 @@ app.notFound((c) => {
 });
 
 const port = parseInt(Bun.env.PORT!) || 3000;
-console.log(`Running at http://localhost:${port}`);
+logger.info({ port }, "server_started");
+
+const EXPIRY_INTERVAL_MS = 60_000;
+
+const globalForInventory = globalThis as typeof globalThis & {
+  inventoryExpiryInterval?: ReturnType<typeof setInterval>;
+};
+
+if (globalForInventory.inventoryExpiryInterval) {
+  clearInterval(globalForInventory.inventoryExpiryInterval);
+}
+
+globalForInventory.inventoryExpiryInterval = setInterval(() => {
+  expireStaleReservations().catch((err) => {
+    logger.error({ err }, "expire_stale_reservations_failed");
+  });
+}, EXPIRY_INTERVAL_MS);
 
 export default {
   port,

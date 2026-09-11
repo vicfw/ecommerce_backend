@@ -3,14 +3,18 @@ import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { getLogger } from "hono-pino";
 import { db } from "../db";
+import { cartGetter } from "./cartControllers";
+import { cartsTable } from "../db/schema/carts";
 import { ordersTable } from "../db/schema/orders";
 import { notifyOrderPayment } from "../sms";
+import { createPendingOrderFromCart } from "../utils/createPendingOrder";
 import {
   deductReserved,
   expireStaleReservations,
   quantitiesForOrder,
   releaseReservation,
   releaseUnpaidOrder,
+  releaseUserPendingReservedOrders,
 } from "../utils/inventory";
 
 const FAILED_CALLBACK_STATUSES = new Set([
@@ -80,37 +84,127 @@ const verifyFailureMessage = (result: number) => {
 
 export const paymentRequest = async (c: Context) => {
   const log = getLogger(c);
-  const body = await c.req.json();
-  const orderId = parsePositiveInt(body.orderId);
+  const user = c.get("user");
+
+  if (!process.env.ZIBAL_REQUEST_API_URL || !process.env.ZIBAL_MERCHANT_ID) {
+    throw new HTTPException(500, {
+      message: "Payment gateway configuration is missing",
+    });
+  }
+
+  if (!process.env.FRONTEND_URL) {
+    throw new HTTPException(500, {
+      message: "Frontend URL configuration is missing",
+    });
+  }
+
+  await expireStaleReservations();
+
+  // Validate cart before releasing any pending orders so a second tab / retry
+  // cannot cancel an in-flight Zibal payment after the cart was already cleared.
+  const cart = await cartGetter(db, user.id);
+  if (!cart || cart.cartItems.length === 0) {
+    throw new HTTPException(400, { message: "Cart is empty" });
+  }
+
+  await releaseUserPendingReservedOrders(user.id);
+
+  let order: Awaited<ReturnType<typeof createPendingOrderFromCart>>;
 
   try {
-    const response = await fetch(process.env.ZIBAL_REQUEST_API_URL!, {
+    order = await createPendingOrderFromCart(user.id);
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    log.error({ err: error, userId: user.id }, "payment_request_order_create_failed");
+    throw new HTTPException(500, { message: "Failed to create order" });
+  }
+
+  log.info(
+    { orderId: order.id, userId: user.id },
+    "payment_request_order_created"
+  );
+
+  const failAndRelease = async (message: string) => {
+    await releaseUnpaidOrder(order.id);
+    log.error({ orderId: order.id, userId: user.id }, "payment_request_failed");
+    throw new HTTPException(502, { message });
+  };
+
+  let gatewayAccepted = false;
+
+  try {
+    const response = await fetch(process.env.ZIBAL_REQUEST_API_URL, {
       method: "POST",
       body: JSON.stringify({
         merchant: process.env.ZIBAL_MERCHANT_ID,
         callbackUrl: `${process.env.FRONTEND_URL}/payment/loader`,
-        amount: body.amount,
-        orderId: body.orderId,
+        amount: order.totalAmount,
+        orderId: order.id,
       }),
       headers: {
         "Content-Type": "application/json",
       },
     });
 
+    const gatewayData = await response.json().catch(() => null);
+
     if (!response.ok) {
       log.error(
-        { orderId, status: response.status },
+        { orderId: order.id, status: response.status },
         "payment_request_gateway_http_error"
+      );
+      await failAndRelease("Payment gateway request failed");
+    }
+
+    const result = Number(
+      gatewayData && typeof gatewayData === "object"
+        ? (gatewayData as { result?: unknown }).result
+        : NaN
+    );
+    const message =
+      gatewayData && typeof gatewayData === "object"
+        ? (gatewayData as { message?: unknown }).message
+        : undefined;
+
+    if (result !== 100 || message !== "success") {
+      log.error(
+        { orderId: order.id, gatewayData },
+        "payment_request_gateway_rejected"
+      );
+      await failAndRelease("Payment gateway rejected the request");
+    }
+
+    gatewayAccepted = true;
+
+    try {
+      await db.delete(cartsTable).where(eq(cartsTable.userId, user.id));
+    } catch (cartError) {
+      log.error(
+        { err: cartError, orderId: order.id, userId: user.id },
+        "payment_request_cart_delete_failed"
       );
     }
 
+    log.info({ orderId: order.id, userId: user.id }, "payment_request_success");
+
     return c.json({
       success: true,
-      data: await response.json(),
+      data: gatewayData,
     });
   } catch (error) {
-    log.error({ err: error, orderId }, "payment_request_failed");
-    throw error;
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+
+    if (!gatewayAccepted) {
+      await releaseUnpaidOrder(order.id);
+    }
+    log.error({ err: error, orderId: order.id }, "payment_request_failed");
+    throw new HTTPException(502, {
+      message: "Payment gateway request failed",
+    });
   }
 };
 

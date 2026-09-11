@@ -10,76 +10,31 @@ import {
   joinUserQuery,
 } from "../db/common-queries/common-queries";
 import { addressesTable } from "../db/schema/addresses";
-import { cartsTable } from "../db/schema/carts";
 import { orderItemsTable } from "../db/schema/orderItems";
 import { ordersTable } from "../db/schema/orders";
 import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
+import { createPendingOrderFromCart } from "../utils/createPendingOrder";
+import { cartGetter } from "./cartControllers";
 import {
   applyInventoryForOrderStatus,
   expireStaleReservations,
-  groupQuantitiesByProductId,
-  reservationExpiryDate,
-  reserve,
+  releaseUserPendingReservedOrders,
 } from "../utils/inventory";
-import { cartGetter } from "./cartControllers";
 
 export const createOrder = async (c: Context) => {
   const user = c.get("user");
 
   await expireStaleReservations();
 
-  const result = await db.transaction(async (trx) => {
-    const cart = await cartGetter(trx, user.id);
+  const cart = await cartGetter(db, user.id);
+  if (!cart || cart.cartItems.length === 0) {
+    throw new HTTPException(400, { message: "Cart is empty" });
+  }
 
-    const [defaultAddress] = await trx
-      .select()
-      .from(addressesTable)
-      .where(
-        and(
-          eq(addressesTable.userId, user.id),
-          eq(addressesTable.isDefault, true)
-        )
-      );
+  await releaseUserPendingReservedOrders(user.id);
 
-    if (!defaultAddress) {
-      throw new HTTPException(400, { message: "Please add a default address" });
-    }
-
-    if (!cart || cart.cartItems.length === 0) {
-      throw new HTTPException(400, { message: "Cart is empty" });
-    }
-
-    const quantities = groupQuantitiesByProductId(cart.cartItems);
-    await reserve(trx, quantities);
-
-    const [order] = await trx
-      .insert(ordersTable)
-      .values({
-        userId: user.id,
-        addressId: defaultAddress.id,
-        totalAmount: cart.discountPrice || 0,
-        profitFromDiscount: cart.profitFromDiscount,
-        deliveryAmount: cart.deliveryCost?.cost || 0,
-        status: "pending",
-        inventoryStatus: "reserved",
-        reservationExpiresAt: reservationExpiryDate(),
-      })
-      .returning();
-
-    for (const item of cart.cartItems) {
-      await trx.insert(orderItemsTable).values({
-        orderId: order.id,
-        price: item.itemPrice,
-        productId: item.productId,
-        quantity: item.quantity,
-      });
-    }
-
-    await trx.delete(cartsTable).where(eq(cartsTable.userId, user.id));
-
-    return order;
-  });
+  const result = await createPendingOrderFromCart(user.id);
 
   getLogger(c).info(
     { orderId: result.id, userId: user.id },

@@ -264,6 +264,34 @@ export const releaseUnpaidOrder = async (orderId: number) => {
   return Boolean(released);
 };
 
+/** Release any pending+reserved orders for a user so a retry does not double-reserve. */
+export const releaseUserPendingReservedOrders = async (userId: number) => {
+  await db.transaction(async (trx) => {
+    const pendingOrders = await trx
+      .select({ id: ordersTable.id })
+      .from(ordersTable)
+      .where(
+        and(
+          eq(ordersTable.userId, userId),
+          eq(ordersTable.status, "pending"),
+          eq(ordersTable.inventoryStatus, "reserved")
+        )
+      )
+      .for("update");
+
+    for (const order of pendingOrders) {
+      await cancelReservedOrder(trx, order.id);
+    }
+
+    if (pendingOrders.length > 0) {
+      logger.warn(
+        { userId, count: pendingOrders.length },
+        "user_pending_orders_released_before_retry"
+      );
+    }
+  });
+};
+
 export const expireStaleReservations = async () => {
   await db.transaction(async (trx) => {
     const staleOrders = await trx

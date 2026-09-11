@@ -240,3 +240,14 @@ export const updateHomepageSchema = z.object({
   mobile: z.array(homepageSectionSchema),
 });
 
+export const updateSiteSettingsSchema = z.object({
+  siteName: z.string().max(200),
+  logoUrl: z
+    .union([z.string().url(), z.literal(""), z.null()])
+    .optional(),
+  logoAlt: z.union([z.string().max(200), z.null()]).optional(),
+  faviconUrl: z
+    .union([z.string().url(), z.literal(""), z.null()])
+    .optional(),
+});
+

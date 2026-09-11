@@ -22,6 +22,7 @@ import {
   commentRoutes,
   adminRoutes,
   homepageRoutes,
+  siteSettingsRoutes,
 } from "./routes";
 import { expireStaleReservations } from "./utils/inventory";
 
@@ -84,6 +85,7 @@ app.route("/colorImage", colorImageRoutes);
 app.route("/comment", commentRoutes);
 app.route("/admin", adminRoutes);
 app.route("/homepage", homepageRoutes);
+app.route("/site-settings", siteSettingsRoutes);
 
 cloudinary.config({
   cloud_name: Bun.env.CLOUDINARY_CLOUD_NAME,

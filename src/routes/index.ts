@@ -13,3 +13,4 @@ export { default as colorImageRoutes } from "./colorImageRoutes";
 export { default as commentRoutes } from "./commentRoutes";
 export { default as adminRoutes } from "./adminRoutes";
 export { default as homepageRoutes } from "./homepageRoutes";
+export { default as siteSettingsRoutes } from "./siteSettingsRoutes";

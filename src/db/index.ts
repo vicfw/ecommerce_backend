@@ -17,6 +17,7 @@ import * as brandsSchema from "./schema/brands";
 import * as colorImagesSchema from "./schema/colorImage";
 import * as commentsSchema from "./schema/comments";
 import * as homepageSchema from "./schema/homepage";
+import * as siteSettingsSchema from "./schema/siteSettings";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL_DRIZZLE,
@@ -41,5 +42,6 @@ export const db = drizzle({
     ...colorImagesSchema,
     ...commentsSchema,
     ...homepageSchema,
+    ...siteSettingsSchema,
   },
 });

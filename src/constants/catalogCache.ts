@@ -9,6 +9,7 @@ export const catalogTags = {
   categories: "categories",
   brands: "brands",
   homepage: "homepage",
+  siteSettings: "site-settings",
   product: (slug: string) => `product:${slug}`,
 } as const;
 

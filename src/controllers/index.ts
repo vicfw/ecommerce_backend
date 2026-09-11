@@ -12,3 +12,4 @@ export * as brand from "./brandControllers";
 export * as colorImage from "./colorImageControllers";
 export * as comment from "./commentControllers";
 export * as homepage from "./homepageControllers";
+export * as siteSettings from "./siteSettingsControllers";

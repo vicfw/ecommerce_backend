@@ -1,0 +1,16 @@
+---
+description: Use Meilisearch for all user-facing catalog search; never add new SQL ILIKE search.
+alwaysApply: true
+---
+
+# Meilisearch is the search engine
+
+User-facing text search (products, and later brands, categories, autocomplete, etc.) goes through Meilisearch.
+
+## Rules
+
+- Postgres is the source of truth for display, SEO, slugs, admin, and storage.
+- Do **not** add new `ILIKE` / `LIKE` endpoints for catalog text search. Existing `ILIKE` in `getProducts` is **fallback only** when Meilisearch is unset or down.
+- Always run `normalizePersianText` on indexed searchable fields **and** on the user query. Use the same helper for both. Never normalize in place in PostgreSQL.
+- New searchable entities get a Meili index (or fields on `products`), write-time upsert/delete, and a reindex path. Reuse `src/search/` (`client.ts`, `normalizePersianText.ts`, ensure-index pattern).
+- Product writes must still succeed if indexing fails (log and continue).

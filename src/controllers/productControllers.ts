@@ -20,6 +20,12 @@ import {
   productListKey,
   productSlugKey,
 } from "../utils/catalogCache";
+import {
+  deleteProductDocument,
+  MEILI_MAX_HITS,
+  searchProductIds,
+  upsertProductById,
+} from "../search";
 import { purgeProductWrite } from "../utils/resolveProductPurgeTargets";
 import { availableStockSql } from "../utils/inventory";
 
@@ -241,6 +247,19 @@ const getSortOrder = (sort?: string) => {
   }
 };
 
+const hydrateProductsByIds = async (ids: number[]) => {
+  if (ids.length === 0) return [];
+
+  const products = await getProductWithRelations(
+    inArray(productsTable.id, ids)
+  );
+  const byId = new Map(products.map((product) => [product.id, product]));
+
+  return ids
+    .map((id) => byId.get(id))
+    .filter((product): product is (typeof products)[number] => !!product);
+};
+
 const parseProductIds = (query: Record<string, string>): number[] | null => {
   if (!query.ids) return null;
 
@@ -264,24 +283,7 @@ export const getProducts = async (c: Context) => {
 
   const load = async () => {
     if (requestedIds) {
-      if (requestedIds.length === 0) {
-        return builderFunc.paginatedResponseBuilder(
-          [],
-          "Products retrieved successfully.",
-          0,
-          1,
-          false,
-          true
-        );
-      }
-
-      const products = await getProductWithRelations(
-        inArray(productsTable.id, requestedIds)
-      );
-      const byId = new Map(products.map((product) => [product.id, product]));
-      const ordered = requestedIds
-        .map((id) => byId.get(id))
-        .filter((product): product is (typeof products)[number] => !!product);
+      const ordered = await hydrateProductsByIds(requestedIds);
 
       return builderFunc.paginatedResponseBuilder(
         ordered,
@@ -294,6 +296,48 @@ export const getProducts = async (c: Context) => {
     }
 
     const pagination = builderFunc.paginationBuilder(query);
+    const searchTerm = (query.search || query.q)?.trim();
+
+    if (searchTerm) {
+      const categoryIds = await resolveCategoryIds(query);
+      const brandId = await resolveBrandId(query);
+      const badgeRaw = query.badgeId || query.badge;
+      const limit = Math.min(pagination.limit, MEILI_MAX_HITS);
+
+      const meili = await searchProductIds({
+        q: searchTerm,
+        offset: pagination.skip,
+        limit,
+        sort: query.sort,
+        categoryIds: categoryIds ?? undefined,
+        brandId,
+        minPrice:
+          query.minPrice && !Number.isNaN(+query.minPrice)
+            ? +query.minPrice
+            : undefined,
+        maxPrice:
+          query.maxPrice && !Number.isNaN(+query.maxPrice)
+            ? +query.maxPrice
+            : undefined,
+        color: query.color,
+        badgeId:
+          badgeRaw && !Number.isNaN(+badgeRaw) ? +badgeRaw : undefined,
+      });
+
+      if (meili) {
+        const products = await hydrateProductsByIds(meili.ids);
+        const hasMore = pagination.page * limit < meili.total;
+
+        return builderFunc.paginatedResponseBuilder(
+          products,
+          "Products retrieved successfully.",
+          meili.total,
+          pagination.page,
+          hasMore,
+          true
+        );
+      }
+    }
 
     const conditions = await buildProductFilterConditions(query);
     const whereClause =
@@ -540,6 +584,7 @@ export const createProduct = async (c: Context) => {
     eq(productsTable.id, product.id)
   );
 
+  await upsertProductById(product.id);
   await purgeProductWrite({
     slugs: [product.slug],
     categoryIds: [product.categoryId],
@@ -668,6 +713,7 @@ export const updateProduct = async (c: Context) => {
     eq(productsTable.id, product.id)
   );
 
+  await upsertProductById(product.id);
   await purgeProductWrite({
     slugs: [isExist.slug, product.slug],
     categoryIds: [isExist.categoryId, product.categoryId],
@@ -701,6 +747,7 @@ export const deleteProduct = async (c: Context) => {
     }
 
     const deleted = deletedProduct[0];
+    await deleteProductDocument(deleted.id);
     await purgeProductWrite({
       slugs: [deleted.slug],
       categoryIds: [deleted.categoryId],

@@ -9,6 +9,7 @@ import { deliveryCostsTable } from "../schema/deliveryCosts";
 import { productsTable } from "../schema/products";
 import { usersTable } from "../schema/users";
 import { address, badge, deliveryCost, productsSeed, user } from "./data";
+import { reindexAllProducts } from "../../search/productIndex";
 
 const main = async () => {
   let createdUserId: number | undefined;
@@ -116,6 +117,12 @@ const main = async () => {
   }
 
   await db.insert(deliveryCostsTable).values({ cost: deliveryCost.cost });
+
+  try {
+    await reindexAllProducts();
+  } catch (err) {
+    console.warn("Meilisearch reindex after seed skipped:", err);
+  }
 };
 
 main()

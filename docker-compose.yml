@@ -32,8 +32,22 @@ services:
       timeout: 5s
       retries: 5
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.14
+    container_name: ecommerce_meilisearch
+    restart: unless-stopped
+    ports:
+      - "${MEILI_PORT:-7700}:7700"
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-dev_meili_master_key_change_me}
+      MEILI_ENV: ${MEILI_ENV:-development}
+    volumes:
+      - meili_data:/meili_data
+
 volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  meili_data:
     driver: local

@@ -2,7 +2,9 @@
   "scripts": {
     "dev": "bun run --hot src/server.ts",
     "db:seed": "bun run src/db/seed/seed.ts",
-    "db:migrate": "bun run src/db/migrate.ts"
+    "db:migrate": "bun run src/db/migrate.ts",
+    "search:reindex": "bun run src/search/reindex.ts",
+    "test": "bun test"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.2.1",
@@ -15,6 +17,7 @@
     "hono-pino": "^0.10.3",
     "hono-rate-limiter": "^0.3.0",
     "ioredis": "^6.0.0",
+    "meilisearch": "^0.62.0",
     "migrate": "^2.1.0",
     "nanoid": "^5.0.7",
     "pg": "^8.13.1",

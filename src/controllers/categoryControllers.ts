@@ -16,6 +16,7 @@ import {
   getCategoriesVersion,
 } from "../utils/catalogCache";
 import { purgeAfterCategoryWrite } from "../utils/purgeCatalog";
+import { reindexProductsByCategoryId } from "../search";
 
 export const getCategories = async (c: Context) => {
   const ver = await getCategoriesVersion();
@@ -316,6 +317,7 @@ export const updateCategory = async (c: Context) => {
     .where(eq(categoriesTable.id, +id))
     .returning();
 
+  await reindexProductsByCategoryId(category.id);
   await purgeAfterCategoryWrite({
     slugs: [existing.slug, category.slug].filter(Boolean),
   });

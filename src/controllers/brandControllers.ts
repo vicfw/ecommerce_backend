@@ -18,6 +18,7 @@ import {
   getProductsVersion,
   hashQuery,
 } from "../utils/catalogCache";
+import { reindexProductsByBrandId } from "../search";
 import { purgeAfterBrandWrite } from "../utils/purgeCatalog";
 
 export const getBrands = async (c: Context) => {
@@ -168,6 +169,7 @@ export const updateBrand = async (c: Context) => {
     });
   }
 
+  await reindexProductsByBrandId(brand.id);
   await purgeAfterBrandWrite({
     slugs: [existing?.slug, brand.slug].filter(
       (slug): slug is string => Boolean(slug)

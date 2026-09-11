@@ -1,14 +1,17 @@
 import { eq, count } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { Jwt } from "hono/utils/jwt";
 import { db } from "../db";
 import { usersTable } from "../db/schema/users";
+import { sendOtpSms } from "../sms";
 import { genToken } from "../utils";
 import { verifyUserOtp } from "../utils/verifyUserOtp";
 import { dateAddition } from "../utils/dateAddition";
 import { generateSMSCode } from "../utils/genSMSCode";
 import { refreshUserOtp } from "../utils/refreshUserOtp";
 import { paginationBuilder } from "../utils/builder/builderFunc";
+import { blacklistToken, getBearerToken } from "../utils/jwtBlacklist";
 
 const sanitizeUser = (user: typeof usersTable.$inferSelect) => ({
   id: user.id,
@@ -132,10 +135,33 @@ export const createUser = async (c: Context) => {
     });
   }
 
+  await sendOtpSms(phoneNumber, code);
+
   return c.json({
     success: true,
     code,
     message: "User created successfully",
+  });
+};
+
+export const logoutUser = async (c: Context) => {
+  const token = getBearerToken(c);
+
+  try {
+    if (token) {
+      const decoded = await Jwt.verify(token, Bun.env.JWT_SECRET || "");
+      const exp = Number((decoded as { exp?: number }).exp);
+      if (Number.isFinite(exp)) {
+        await blacklistToken(token, exp);
+      }
+    }
+  } catch {
+    // Client session is still cleared even if revoke is best-effort.
+  }
+
+  return c.json({
+    success: true,
+    message: "Logged out successfully",
   });
 };
 

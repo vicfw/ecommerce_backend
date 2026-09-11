@@ -15,6 +15,9 @@ users.post("/", (c) => user.createUser(c));
 // Login User
 users.post("/login", (c) => user.loginUser(c));
 
+// Logout User
+users.post("/logout", protect, (c) => user.logoutUser(c));
+
 // Get User Profile
 users.get("/me", protect, (c) => user.getMe(c));
 

@@ -4,6 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { getLogger } from "hono-pino";
 import { db } from "../db";
 import { ordersTable } from "../db/schema/orders";
+import { notifyOrderPayment } from "../sms";
 import {
   deductReserved,
   expireStaleReservations,
@@ -15,6 +16,13 @@ import {
 const FAILED_CALLBACK_STATUSES = new Set([
   -2, -1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
 ]);
+
+const asJsonRecord = (value: unknown): Record<string, unknown> => {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+};
 
 const parsePositiveInt = (value: unknown): number | null => {
   if (value === null || value === undefined || value === "") {
@@ -119,13 +127,19 @@ export const verifyPayment = async (c: Context) => {
     data: unknown
   ) => {
     if (orderId) {
-      await releaseUnpaidOrder(orderId);
+      const released = await releaseUnpaidOrder(orderId);
+      if (released) {
+        void notifyOrderPayment({ orderId, kind: "failed" });
+      }
     }
 
     return c.json({
       success: false,
       message,
-      data,
+      data: {
+        ...asJsonRecord(data),
+        orderId,
+      },
     });
   };
 
@@ -323,8 +337,13 @@ export const verifyPayment = async (c: Context) => {
           ? "payment_already_processed"
           : "payment_verified"
       );
+
+      if (verifyResult.message !== "Payment was already processed successfully") {
+        void notifyOrderPayment({ orderId, kind: "success" });
+      }
     } else if (verifyResult.message === "Order reservation has expired") {
       log.warn({ orderId, trackId }, "payment_reservation_expired");
+      void notifyOrderPayment({ orderId, kind: "failed" });
     } else {
       log.warn({ orderId, trackId }, "payment_verify_failed");
     }
@@ -332,7 +351,10 @@ export const verifyPayment = async (c: Context) => {
     return c.json({
       success: verifyResult.ok,
       message: verifyResult.message,
-      data: verificationData,
+      data: {
+        ...asJsonRecord(verificationData),
+        orderId,
+      },
     });
   } catch (error) {
     if (error instanceof HTTPException) {
@@ -345,7 +367,13 @@ export const verifyPayment = async (c: Context) => {
     );
 
     if (orderIdFromClient) {
-      await releaseUnpaidOrder(orderIdFromClient);
+      const released = await releaseUnpaidOrder(orderIdFromClient);
+      if (released) {
+        void notifyOrderPayment({
+          orderId: orderIdFromClient,
+          kind: "failed",
+        });
+      }
       return c.json({
         success: false,
         message: "Payment verification failed",

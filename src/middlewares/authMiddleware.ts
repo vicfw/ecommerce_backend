@@ -4,6 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { Jwt } from "hono/utils/jwt";
 import { db } from "../db";
 import { usersTable } from "../db/schema/users";
+import { getBearerToken, isTokenBlacklisted } from "../utils/jwtBlacklist";
 
 // Protect Route for Authenticated Users
 export const protect = async (c: Context, next: Next) => {
@@ -14,13 +15,19 @@ export const protect = async (c: Context, next: Next) => {
     c.req.header("Authorization")?.startsWith("Bearer")
   ) {
     try {
-      token = c.req.header("Authorization")?.replace(/Bearer\s+/i, "");
+      token = getBearerToken(c);
 
       if (!token) {
         return c.json({ message: "Not authorized to access this route" });
       }
 
       const decoded = await Jwt.verify(token, Bun.env.JWT_SECRET || "");
+
+      if (await isTokenBlacklisted(token)) {
+        throw new HTTPException(403, {
+          message: "Invalid token! You are not authorized!",
+        });
+      }
       const id = (decoded as { id: string }).id;
 
       const user = await db.query.usersTable.findFirst({

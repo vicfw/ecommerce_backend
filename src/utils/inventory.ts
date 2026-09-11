@@ -242,7 +242,7 @@ const cancelReservedOrder = async (trx: DbOrTrx, orderId: number) => {
 };
 
 export const releaseUnpaidOrder = async (orderId: number) => {
-  await db.transaction(async (trx) => {
+  const released = await db.transaction(async (trx) => {
     const [order] = await trx
       .select({
         id: ordersTable.id,
@@ -253,12 +253,15 @@ export const releaseUnpaidOrder = async (orderId: number) => {
       .for("update");
 
     if (!order || order.inventoryStatus !== "reserved") {
-      return;
+      return false;
     }
 
     await cancelReservedOrder(trx, order.id);
     logger.warn({ orderId }, "unpaid_order_released");
+    return true;
   });
+
+  return Boolean(released);
 };
 
 export const expireStaleReservations = async () => {

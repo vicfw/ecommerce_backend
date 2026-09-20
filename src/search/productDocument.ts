@@ -70,7 +70,7 @@ const toCreatedAt = (value: Date | string | null | undefined) => {
 };
 
 export function toProductDocument(
-  source: ProductIndexSource
+  source: ProductIndexSource,
 ): ProductSearchDocument {
   return {
     id: source.id,

@@ -1,6 +1,7 @@
 import { eq, count } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { isUniqueViolation } from "../utils/isUniqueViolation";
 import { Jwt } from "hono/utils/jwt";
 import { db } from "../db";
 import { usersTable } from "../db/schema/users";
@@ -123,15 +124,28 @@ export const createUser = async (c: Context) => {
     cost: 4,
   });
 
-  const user = await db.insert(usersTable).values({
-    phoneNumber,
-    code: hashedPassword,
-    codeValidUntil: dateWithExtra2Minutes,
-  });
+  try {
+    const user = await db.insert(usersTable).values({
+      phoneNumber,
+      code: hashedPassword,
+      codeValidUntil: dateWithExtra2Minutes,
+    });
 
-  if (!user) {
-    throw new HTTPException(500, {
-      message: "Something went wrong",
+    if (!user) {
+      throw new HTTPException(500, {
+        message: "Something went wrong",
+      });
+    }
+  } catch (error) {
+    if (!isUniqueViolation(error)) {
+      throw error;
+    }
+
+    const refreshedCode = await refreshUserOtp(phoneNumber);
+    return c.json({
+      success: true,
+      code: refreshedCode,
+      message: "users code updated.",
     });
   }
 

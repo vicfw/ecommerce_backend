@@ -602,21 +602,6 @@ export const updateProduct = async (c: Context) => {
   const { id } = c.req.param();
   const body = await c.req.json();
 
-  const [isExist] = await db
-    .select()
-    .from(productsTable)
-    .where(eq(productsTable.id, +id));
-
-  if (!isExist) {
-    return c.json(
-      {
-        success: false,
-        message: "Product not found.",
-      },
-      404
-    );
-  }
-
   const {
     badges,
     colorImageIds,
@@ -633,7 +618,29 @@ export const updateProduct = async (c: Context) => {
     defaultColorImage,
   } = body;
 
+  let previous: {
+    slug: string | null;
+    categoryId: number;
+    brandId: number | null;
+  } | null = null;
+
   const product = await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, +id))
+      .for("update");
+
+    if (!locked) {
+      throw new HTTPException(404, { message: "Product not found." });
+    }
+
+    previous = {
+      slug: locked.slug,
+      categoryId: locked.categoryId,
+      brandId: locked.brandId,
+    };
+
     const updateData: Partial<typeof productsTable.$inferInsert> = {
       updatedAt: new Date(),
     };
@@ -646,7 +653,7 @@ export const updateProduct = async (c: Context) => {
     if (price !== undefined) updateData.price = price;
     if (description !== undefined) updateData.description = description;
     if (quantity !== undefined) {
-      if (quantity < (isExist.reservedQuantity ?? 0)) {
+      if (quantity < (locked.reservedQuantity ?? 0)) {
         throw new HTTPException(400, {
           message: "Quantity cannot be less than reserved stock",
         });
@@ -672,6 +679,10 @@ export const updateProduct = async (c: Context) => {
       .set(updateData)
       .where(eq(productsTable.id, +id))
       .returning();
+
+    if (!updated) {
+      throw new HTTPException(404, { message: "Product not found." });
+    }
 
     if (badges !== undefined) {
       await tx
@@ -715,9 +726,9 @@ export const updateProduct = async (c: Context) => {
 
   await upsertProductById(product.id);
   await purgeProductWrite({
-    slugs: [isExist.slug, product.slug],
-    categoryIds: [isExist.categoryId, product.categoryId],
-    brandIds: [isExist.brandId, product.brandId],
+    slugs: [previous?.slug, product.slug],
+    categoryIds: [previous?.categoryId, product.categoryId],
+    brandIds: [previous?.brandId, product.brandId],
   });
 
   return c.json({

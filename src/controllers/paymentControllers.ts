@@ -1,9 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, lt, or } from "drizzle-orm";
 import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { getLogger } from "hono-pino";
 import { db } from "../db";
-import { cartGetter } from "./cartControllers";
 import { cartsTable } from "../db/schema/carts";
 import { ordersTable } from "../db/schema/orders";
 import { notifyOrderPayment } from "../sms";
@@ -14,7 +13,6 @@ import {
   quantitiesForOrder,
   releaseReservation,
   releaseUnpaidOrder,
-  releaseUserPendingReservedOrders,
 } from "../utils/inventory";
 
 const FAILED_CALLBACK_STATUSES = new Set([
@@ -49,6 +47,53 @@ const isFailedCallback = (success: unknown, status: unknown) => {
 
   const statusNum = Number(status);
   return FAILED_CALLBACK_STATUSES.has(statusNum);
+};
+
+const PAYMENT_INIT_STALE_MS = 30_000;
+
+const zibalSuccessPayload = (trackId: string | number) => ({
+  result: 100,
+  message: "success" as const,
+  trackId,
+});
+
+const claimPaymentInit = async (orderId: number) => {
+  const staleBefore = new Date(Date.now() - PAYMENT_INIT_STALE_MS);
+
+  const [claimed] = await db
+    .update(ordersTable)
+    .set({
+      paymentInitStartedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(ordersTable.id, orderId),
+        isNull(ordersTable.paymentTrackId),
+        or(
+          isNull(ordersTable.paymentInitStartedAt),
+          lt(ordersTable.paymentInitStartedAt, staleBefore)
+        )
+      )
+    )
+    .returning({ id: ordersTable.id });
+
+  if (claimed) {
+    return { kind: "claimed" as const };
+  }
+
+  const [current] = await db
+    .select({
+      paymentTrackId: ordersTable.paymentTrackId,
+    })
+    .from(ordersTable)
+    .where(eq(ordersTable.id, orderId));
+
+  if (current?.paymentTrackId) {
+    return { kind: "has_track" as const, trackId: current.paymentTrackId };
+  }
+
+  return { kind: "in_progress" as const };
 };
 
 const verifyFailureMessage = (result: number) => {
@@ -100,15 +145,6 @@ export const paymentRequest = async (c: Context) => {
 
   await expireStaleReservations();
 
-  // Validate cart before releasing any pending orders so a second tab / retry
-  // cannot cancel an in-flight Zibal payment after the cart was already cleared.
-  const cart = await cartGetter(db, user.id);
-  if (!cart || cart.cartItems.length === 0) {
-    throw new HTTPException(400, { message: "Cart is empty" });
-  }
-
-  await releaseUserPendingReservedOrders(user.id);
-
   let order: Awaited<ReturnType<typeof createPendingOrderFromCart>>;
 
   try {
@@ -126,7 +162,29 @@ export const paymentRequest = async (c: Context) => {
     "payment_request_order_created"
   );
 
-  const failAndRelease = async (message: string) => {
+  if (order.paymentTrackId) {
+    log.info({ orderId: order.id, userId: user.id }, "payment_request_resumed");
+    return c.json({
+      success: true,
+      data: zibalSuccessPayload(order.paymentTrackId),
+    });
+  }
+
+  const claim = await claimPaymentInit(order.id);
+  if (claim.kind === "has_track") {
+    log.info({ orderId: order.id, userId: user.id }, "payment_request_resumed");
+    return c.json({
+      success: true,
+      data: zibalSuccessPayload(claim.trackId),
+    });
+  }
+  if (claim.kind === "in_progress") {
+    throw new HTTPException(409, {
+      message: "Checkout already in progress",
+    });
+  }
+
+  const failAndRelease = async (message: string): Promise<never> => {
     await releaseUnpaidOrder(order.id);
     log.error({ orderId: order.id, userId: user.id }, "payment_request_failed");
     throw new HTTPException(502, { message });
@@ -167,8 +225,12 @@ export const paymentRequest = async (c: Context) => {
       gatewayData && typeof gatewayData === "object"
         ? (gatewayData as { message?: unknown }).message
         : undefined;
+    const trackId =
+      gatewayData && typeof gatewayData === "object"
+        ? (gatewayData as { trackId?: unknown }).trackId
+        : undefined;
 
-    if (result !== 100 || message !== "success") {
+    if (result !== 100 || message !== "success" || trackId == null) {
       log.error(
         { orderId: order.id, gatewayData },
         "payment_request_gateway_rejected"
@@ -177,6 +239,21 @@ export const paymentRequest = async (c: Context) => {
     }
 
     gatewayAccepted = true;
+
+    try {
+      await db
+        .update(ordersTable)
+        .set({
+          paymentTrackId: String(trackId),
+          updatedAt: new Date(),
+        })
+        .where(eq(ordersTable.id, order.id));
+    } catch (trackError) {
+      log.error(
+        { err: trackError, orderId: order.id, userId: user.id },
+        "payment_request_track_id_persist_failed"
+      );
+    }
 
     try {
       await db.delete(cartsTable).where(eq(cartsTable.userId, user.id));
@@ -459,21 +536,6 @@ export const verifyPayment = async (c: Context) => {
       { err: error, orderId: orderIdFromClient, trackId },
       "payment_verify_unexpected_error"
     );
-
-    if (orderIdFromClient) {
-      const released = await releaseUnpaidOrder(orderIdFromClient);
-      if (released) {
-        void notifyOrderPayment({
-          orderId: orderIdFromClient,
-          kind: "failed",
-        });
-      }
-      return c.json({
-        success: false,
-        message: "Payment verification failed",
-        data: { trackId, orderId: orderIdFromClient },
-      });
-    }
 
     throw new HTTPException(500, {
       message: "Internal server error during payment verification",

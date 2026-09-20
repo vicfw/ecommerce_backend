@@ -15,24 +15,15 @@ import { ordersTable } from "../db/schema/orders";
 import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
 import { createPendingOrderFromCart } from "../utils/createPendingOrder";
-import { cartGetter } from "./cartControllers";
 import {
   applyInventoryForOrderStatus,
   expireStaleReservations,
-  releaseUserPendingReservedOrders,
 } from "../utils/inventory";
 
 export const createOrder = async (c: Context) => {
   const user = c.get("user");
 
   await expireStaleReservations();
-
-  const cart = await cartGetter(db, user.id);
-  if (!cart || cart.cartItems.length === 0) {
-    throw new HTTPException(400, { message: "Cart is empty" });
-  }
-
-  await releaseUserPendingReservedOrders(user.id);
 
   const result = await createPendingOrderFromCart(user.id);
 
@@ -239,6 +230,10 @@ export const updateAdminOrderStatus = async (c: Context) => {
 
     if (!order) {
       throw new HTTPException(404, { message: "Order not found" });
+    }
+
+    if (order.status === status) {
+      return order;
     }
 
     const inventoryStatus = await applyInventoryForOrderStatus(

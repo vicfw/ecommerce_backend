@@ -3,6 +3,7 @@ import { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../db";
 import { addressesTable } from "../db/schema/addresses";
+import { lockUserRow } from "../utils/lockUser";
 
 export const getAddress = async (c: Context) => {
   const user = c.get("user");
@@ -24,6 +25,20 @@ export const createAddress = async (c: Context) => {
   const user = c.get("user");
 
   const result = await db.transaction(async (trx) => {
+    await lockUserRow(trx, user.id);
+
+    if (body.isDefault) {
+      await trx
+        .update(addressesTable)
+        .set({ isDefault: false })
+        .where(
+          and(
+            eq(addressesTable.userId, user.id),
+            eq(addressesTable.isDefault, true)
+          )
+        );
+    }
+
     const [address] = await trx
       .insert(addressesTable)
       .values({
@@ -58,6 +73,8 @@ export const updateAddress = async (c: Context) => {
   }
 
   const result = await db.transaction(async (trx) => {
+    await lockUserRow(trx, user.id);
+
     // If `isDefault` is set to true, update other addresses to false
     if (body.isDefault) {
       await trx

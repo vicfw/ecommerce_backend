@@ -95,6 +95,15 @@ export const adminRequestOtpSchema = z.object({
   phoneNumber: z.string().min(1),
 });
 
+export const changePhoneRequestSchema = z.object({
+  phoneNumber: z.string().min(1),
+});
+
+export const changePhoneVerifySchema = z.object({
+  phoneNumber: z.string().min(1),
+  code: z.string().length(4),
+});
+
 export const updateOrderStatusSchema = z.object({
   status: z.enum(ORDER_STATUSES),
 });
@@ -112,6 +121,22 @@ export const badgesSchema = z.object({
 });
 
 export const partialBadgeSchema = badgesSchema.partial();
+
+export const couponSchema = z.object({
+  code: z.string().min(1),
+  type: z.enum(["percent", "fixed"]),
+  value: z.number().positive(),
+  minCart: z.number().nonnegative().nullable().optional(),
+  expiresAt: z.union([z.string(), z.date()]).nullable().optional(),
+  active: z.boolean().optional(),
+  maxUses: z.number().int().positive().nullable().optional(),
+});
+
+export const partialCouponSchema = couponSchema.partial();
+
+export const applyCouponSchema = z.object({
+  code: z.string().min(1),
+});
 
 export const productSchema = z.object({
   prName: z.string().min(1),
@@ -164,11 +189,19 @@ export const colorImageSchema = z.object({
 export const partialColorImageSchema = colorImageSchema.partial();
 
 export const commentSchema = z.object({
-  userId: z.number(),
   productId: z.number(),
   body: z.string(),
-  isApproved: z.boolean().optional(),
+  rating: z.number().int().min(1).max(5),
   image: z.string(),
+});
+
+export const createReturnRequestSchema = z.object({
+  orderId: z.number().int().positive(),
+  reason: z.string().min(1).max(2000),
+});
+
+export const updateReturnRequestSchema = z.object({
+  status: z.enum(["approved", "rejected"]),
 });
 
 export const homepageBannerSectionSchema = z.object({

@@ -18,3 +18,6 @@ export const CATALOG_VERSION_KEYS = {
   categories: "catalog:categories:ver",
   brands: "catalog:brands:ver",
 } as const;
+
+/** Shared with storefront Next cache handler — bump on catalog writes. */
+export const nextTagVersionKey = (tag: string) => `next:tagver:${tag}`;

@@ -7,9 +7,10 @@ import {
   normalizeHomepageLayout,
   type HomepageLayout,
 } from "../db/schema/homepage";
-import { CATALOG_TTL_SECONDS } from "../constants/catalogCache";
+import { CATALOG_TTL_SECONDS, catalogTags } from "../constants/catalogCache";
 import { withRedis } from "../lib/redis";
 import {
+  bumpNextTagVersions,
   cacheGetOrSet,
   cacheSet,
 } from "../utils/catalogCache";
@@ -95,8 +96,9 @@ export const updateHomepage = async (c: Context) => {
 
   await cacheSet(HOMEPAGE_CACHE_KEY, payload, CATALOG_TTL_SECONDS);
 
+  await bumpNextTagVersions([catalogTags.homepage]);
   revalidateStorefront({
-    tags: ["homepage"],
+    tags: [catalogTags.homepage],
     paths: ["/"],
   });
 

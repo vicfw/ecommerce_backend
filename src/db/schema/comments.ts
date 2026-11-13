@@ -13,6 +13,7 @@ export const commentsTable = pgTable("comments", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   body: text("body").notNull(),
   image: text("image").notNull(),
+  rating: integer("rating").notNull(),
   isApproved: boolean("isApproved").default(false),
   productId: integer("productId").references(() => productsTable.id, {
     onDelete: "cascade",

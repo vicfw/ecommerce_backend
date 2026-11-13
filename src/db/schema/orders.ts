@@ -29,6 +29,8 @@ export const ordersTable = pgTable(
     addressId: integer("address_id").notNull(),
     totalAmount: integer("total_amount").notNull(),
     profitFromDiscount: real("profit_from_discount").default(0),
+    couponCode: varchar("coupon_code", { length: 64 }),
+    couponAmount: real("coupon_amount").default(0),
     status: varchar("status").default(statusEnum.enumValues[0]),
     inventoryStatus: varchar("inventory_status").default("released"),
     reservationExpiresAt: timestamp("reservation_expires_at"),

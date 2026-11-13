@@ -9,6 +9,7 @@ import {
   paginatedResponseBuilder,
   paginationBuilder,
 } from "../utils/builder/builderFunc";
+import { purgeAfterProductWrite } from "../utils/purgeCatalog";
 
 type CommentQueryOptions = {
   productId?: string;
@@ -58,6 +59,7 @@ const fetchComments = async (options: CommentQueryOptions, url: Record<string, s
         productId: commentsTable.productId,
         body: commentsTable.body,
         image: commentsTable.image,
+        rating: commentsTable.rating,
         isApproved: commentsTable.isApproved,
         createdAt: commentsTable.createdAt,
         updatedAt: commentsTable.updatedAt,
@@ -77,6 +79,7 @@ const fetchComments = async (options: CommentQueryOptions, url: Record<string, s
         productId: commentsTable.productId,
         body: commentsTable.body,
         image: commentsTable.image,
+        rating: commentsTable.rating,
         user: {
           id: usersTable.id,
           name: usersTable.name,
@@ -158,16 +161,29 @@ export const getAdminComments = async (c: Context) => {
   );
 };
 
+const purgeProductForComment = async (productId: number | null | undefined) => {
+  if (productId == null) return;
+  const [product] = await db
+    .select({ slug: productsTable.slug })
+    .from(productsTable)
+    .where(eq(productsTable.id, productId))
+    .limit(1);
+  if (!product?.slug) return;
+  await purgeAfterProductWrite({ slugs: [product.slug] });
+};
+
 export const createComment = async (c: Context) => {
+  const user = c.get("user");
   const body = await c.req.json();
 
   const [newComment] = await db
     .insert(commentsTable)
     .values({
-      userId: body.userId,
+      userId: user.id,
       productId: body.productId,
       body: body.body,
       image: body.image,
+      rating: body.rating,
       isApproved: false,
     })
     .returning();
@@ -182,6 +198,15 @@ export const createComment = async (c: Context) => {
 export const deleteComment = async (c: Context) => {
   const { id } = c.req.param();
 
+  const [existing] = await db
+    .select({
+      productId: commentsTable.productId,
+      isApproved: commentsTable.isApproved,
+    })
+    .from(commentsTable)
+    .where(eq(commentsTable.id, +id))
+    .limit(1);
+
   const comment = await db
     .delete(commentsTable)
     .where(eq(commentsTable.id, +id));
@@ -190,6 +215,10 @@ export const deleteComment = async (c: Context) => {
     throw new HTTPException(404, {
       message: "Comment not found.",
     });
+  }
+
+  if (existing?.isApproved) {
+    await purgeProductForComment(existing.productId);
   }
 
   return c.json({
@@ -219,6 +248,10 @@ export const updateComment = async (c: Context) => {
     throw new HTTPException(404, {
       message: "Comment not found.",
     });
+  }
+
+  if (body.isApproved !== undefined) {
+    await purgeProductForComment(comment.productId);
   }
 
   return c.json({

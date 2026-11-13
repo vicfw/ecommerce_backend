@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+  boolean,
   doublePrecision,
   integer,
   pgTable,
@@ -23,6 +24,7 @@ export const productsTable = pgTable("products", {
   description: text("description"),
   quantity: integer("quantity").notNull(),
   reservedQuantity: integer("reserved_quantity").notNull().default(0),
+  lowStockNotified: boolean("low_stock_notified").notNull().default(false),
   images: text("images").array(),
   point: integer("point").default(0),
   categoryId: integer().notNull(),

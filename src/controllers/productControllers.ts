@@ -8,6 +8,7 @@ import { badgesToProducts } from "../db/schema/badgesToProducts";
 import { brandsTable } from "../db/schema/brands";
 import { categoriesTable } from "../db/schema/categories";
 import { colorImagesTable } from "../db/schema/colorImage";
+import { commentsTable } from "../db/schema/comments";
 import { productsTable } from "../db/schema/products";
 import { builderFunc } from "../utils";
 import {
@@ -28,6 +29,7 @@ import {
 } from "../search";
 import { purgeProductWrite } from "../utils/resolveProductPurgeTargets";
 import { availableStockSql } from "../utils/inventory";
+import { scheduleLowStockAlertSync } from "../utils/lowStockAlert";
 
 const slugify = (value: string) =>
   value
@@ -45,6 +47,17 @@ const getProductWithRelations = (whereClause: SQL<unknown>) => {
     .select({
       ...getTableColumns(productsTable),
       availableQuantity: availableStockSql.as("availableQuantity"),
+      averageRating: sql<number>`
+        COALESCE(
+          (
+            SELECT ROUND(AVG(${commentsTable.rating})::numeric, 1)
+            FROM ${commentsTable}
+            WHERE ${commentsTable.productId} = ${productsTable.id}
+              AND ${commentsTable.isApproved} = true
+          ),
+          0
+        )
+      `.as("averageRating"),
       badges: sql<string>`
         COALESCE(
           JSON_AGG(
@@ -375,6 +388,121 @@ export const getProducts = async (c: Context) => {
   return c.json(await cacheGetOrSet(key, load));
 };
 
+const SUGGEST_LIMIT = 8;
+
+const emptySuggestions = () => ({
+  products: [] as Awaited<ReturnType<typeof hydrateProductsByIds>>,
+  brands: [] as Array<{
+    id: number;
+    name: string;
+    engName: string;
+    slug: string;
+  }>,
+  categories: [] as Array<{ id: number; name: string; slug: string }>,
+});
+
+const suggestionsFromProducts = async (
+  products: Awaited<ReturnType<typeof hydrateProductsByIds>>
+) => {
+  const brandIds: number[] = [];
+  const categoryIds: number[] = [];
+  const seenBrands = new Set<number>();
+  const seenCategories = new Set<number>();
+
+  for (const product of products) {
+    if (
+      product.brandId != null &&
+      !seenBrands.has(product.brandId)
+    ) {
+      seenBrands.add(product.brandId);
+      brandIds.push(product.brandId);
+    }
+    if (!seenCategories.has(product.categoryId)) {
+      seenCategories.add(product.categoryId);
+      categoryIds.push(product.categoryId);
+    }
+  }
+
+  const [brandRows, categoryRows] = await Promise.all([
+    brandIds.length
+      ? db
+          .select({
+            id: brandsTable.id,
+            name: brandsTable.name,
+            engName: brandsTable.engName,
+            slug: brandsTable.slug,
+          })
+          .from(brandsTable)
+          .where(inArray(brandsTable.id, brandIds))
+      : Promise.resolve([]),
+    categoryIds.length
+      ? db
+          .select({
+            id: categoriesTable.id,
+            name: categoriesTable.name,
+            slug: categoriesTable.slug,
+          })
+          .from(categoriesTable)
+          .where(inArray(categoriesTable.id, categoryIds))
+      : Promise.resolve([]),
+  ]);
+
+  const brandsById = new Map(brandRows.map((row) => [row.id, row]));
+  const categoriesById = new Map(categoryRows.map((row) => [row.id, row]));
+
+  return {
+    products,
+    brands: brandIds
+      .map((id) => brandsById.get(id))
+      .filter((row): row is (typeof brandRows)[number] => !!row),
+    categories: categoryIds
+      .map((id) => categoriesById.get(id))
+      .filter((row): row is (typeof categoryRows)[number] => !!row),
+  };
+};
+
+export const getProductSuggestions = async (c: Context) => {
+  const searchTerm = (c.req.query("q") || c.req.query("search") || "").trim();
+
+  if (!searchTerm) {
+    return c.json({
+      success: true,
+      data: emptySuggestions(),
+      message: "Suggestions retrieved successfully.",
+    });
+  }
+
+  const meili = await searchProductIds({
+    q: searchTerm,
+    offset: 0,
+    limit: SUGGEST_LIMIT,
+  });
+
+  let products: Awaited<ReturnType<typeof hydrateProductsByIds>>;
+
+  if (meili) {
+    products = await hydrateProductsByIds(meili.ids);
+  } else {
+    const pattern = `%${escapeIlikePattern(searchTerm)}%`;
+    products = await getProductWithRelations(
+      sql`(
+        ${productsTable.prName} ILIKE ${pattern} ESCAPE '\\'
+        OR ${productsTable.enName} ILIKE ${pattern} ESCAPE '\\'
+      )`
+    )
+      .limit(SUGGEST_LIMIT)
+      .orderBy(asc(productsTable.id));
+  }
+
+  const data = await suggestionsFromProducts(products);
+
+  return c.json({
+    success: true,
+    data,
+    message: "Suggestions retrieved successfully.",
+  });
+};
+
 export const getProductFilters = async (c: Context) => {
   const query = c.req.query();
 
@@ -585,6 +713,7 @@ export const createProduct = async (c: Context) => {
     eq(productsTable.id, product.id)
   );
 
+  scheduleLowStockAlertSync([product.id]);
   await upsertProductById(product.id);
   await purgeProductWrite({
     slugs: [product.slug],
@@ -725,6 +854,9 @@ export const updateProduct = async (c: Context) => {
     eq(productsTable.id, product.id)
   );
 
+  if (quantity !== undefined) {
+    scheduleLowStockAlertSync([product.id]);
+  }
   await upsertProductById(product.id);
   await purgeProductWrite({
     slugs: [previous?.slug, product.slug],

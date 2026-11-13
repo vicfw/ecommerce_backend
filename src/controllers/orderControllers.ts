@@ -14,11 +14,12 @@ import { orderItemsTable } from "../db/schema/orderItems";
 import { ordersTable } from "../db/schema/orders";
 import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
+import { maybeReleaseCouponUse } from "../utils/coupon";
 import { createPendingOrderFromCart } from "../utils/createPendingOrder";
 import {
+  afterInventoryCommit,
   applyInventoryForOrderStatus,
   expireStaleReservations,
-  purgeCatalogForProductIds,
 } from "../utils/inventory";
 
 export const createOrder = async (c: Context) => {
@@ -48,6 +49,8 @@ export const getOrder = async (c: Context) => {
       id: ordersTable.id,
       totalAmount: ordersTable.totalAmount,
       profitFromDiscount: ordersTable.profitFromDiscount,
+      couponCode: ordersTable.couponCode,
+      couponAmount: ordersTable.couponAmount,
       status: ordersTable.status,
       deliveryAmount: ordersTable.deliveryAmount,
       createdAt: ordersTable.createdAt,
@@ -243,6 +246,8 @@ export const updateAdminOrderStatus = async (c: Context) => {
       status
     );
 
+    await maybeReleaseCouponUse(trx, order, status);
+
     const [updated] = await trx
       .update(ordersTable)
       .set({ status, inventoryStatus, updatedAt: new Date() })
@@ -261,7 +266,7 @@ export const updateAdminOrderStatus = async (c: Context) => {
     return { updatedOrder: updated, productIds };
   });
 
-  await purgeCatalogForProductIds(productIds);
+  await afterInventoryCommit(productIds);
 
   return c.json({
     success: true,

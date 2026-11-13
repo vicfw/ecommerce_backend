@@ -1,0 +1,32 @@
+---
+description: Complete features with Playwright e2e in ecommerce_e2e during the same chat session
+alwaysApply: true
+---
+
+# E2E in the same session
+
+When you **finish a feature** or **change user-visible or API behavior** in this repo, the task is **not done** until `../ecommerce_e2e` has matching Playwright coverage **added or updated in this same chat session**.
+
+## Applies to
+
+- New endpoints, auth, validation, or business rules the storefront or admin rely on
+- Changes to status codes, error shapes, redirects, or data the UI displays
+- Refactors that change contracts or timing that scenarios assert
+
+## Skip only when
+
+- No observable behavior change (internal refactor, ops-only, non-UI metrics)
+- The user explicitly scoped the task without e2e
+
+Say in one line why e2e was skipped.
+
+## Workflow
+
+1. Ship the product change here first.
+2. Add or update a scenario under `../ecommerce_e2e/tests/` (folder README, one `test()`, conventions from that repo’s Playwright rule).
+3. Run that folder’s tests when feasible; fix bugs in the **owning** repo—no test-only workarounds.
+4. Mark the feature complete only after e2e is in place or legitimately skipped.
+
+## Maintenance
+
+Any change that alters what users or tests expect requires updating the affected spec in the same session—do not leave scenarios stale or failing.

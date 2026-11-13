@@ -12,6 +12,23 @@ describe("orderPayableAmount", () => {
     );
   });
 
+  it("subtracts coupon amount without going below delivery", () => {
+    expect(
+      orderPayableAmount({
+        totalAmount: 100_000,
+        couponAmount: 30_000,
+        deliveryAmount: 45_000,
+      })
+    ).toBe(115_000);
+    expect(
+      orderPayableAmount({
+        totalAmount: 10_000,
+        couponAmount: 50_000,
+        deliveryAmount: 5_000,
+      })
+    ).toBe(5_000);
+  });
+
   it("treats missing amounts as zero", () => {
     expect(orderPayableAmount({ totalAmount: 10, deliveryAmount: null })).toBe(10);
     expect(orderPayableAmount({ totalAmount: null, deliveryAmount: 5 })).toBe(5);

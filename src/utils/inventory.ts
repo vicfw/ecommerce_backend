@@ -6,6 +6,7 @@ import { ordersTable } from "../db/schema/orders";
 import { productsTable } from "../db/schema/products";
 import type { OrderStatus } from "../constants/orderStatus";
 import { logger } from "../lib/logger";
+import { scheduleLowStockAlertSync } from "./lowStockAlert";
 import { purgeAfterProductWrite } from "./purgeCatalog";
 
 /** After inventory commits: drop product slug Redis keys + bump list version. */
@@ -27,6 +28,15 @@ export const purgeCatalogForProductIds = async (
   await purgeAfterProductWrite({
     slugs: rows.map((row) => row.slug).filter(Boolean),
   });
+};
+
+/** Catalog purge + low-stock Telegram sync after inventory commits. */
+export const afterInventoryCommit = async (
+  productIds: Iterable<number>
+): Promise<void> => {
+  const ids = [...productIds];
+  scheduleLowStockAlertSync(ids);
+  await purgeCatalogForProductIds(ids);
 };
 
 export const INVENTORY_STATUSES = ["reserved", "deducted", "released"] as const;
@@ -290,7 +300,7 @@ export const releaseUnpaidOrder = async (orderId: number) => {
   });
 
   if (released) {
-    await purgeCatalogForProductIds(productIds);
+    await afterInventoryCommit(productIds);
   }
 
   return Boolean(released);
@@ -325,5 +335,5 @@ export const expireStaleReservations = async () => {
     }
   });
 
-  await purgeCatalogForProductIds(productIds);
+  await afterInventoryCommit(productIds);
 };

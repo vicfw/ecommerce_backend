@@ -14,6 +14,13 @@ carts.post("/", protect, zValidator("json", validation.cartSchema), (c) =>
 carts.delete("/", protect, (c) => cart.deleteCart(c));
 carts.delete("/cartItem/:id", protect, (c) => cart.deleteCartItem(c));
 carts.get("/length", protect, (c) => cart.cartLength(c));
+carts.post(
+  "/coupon",
+  protect,
+  zValidator("json", validation.applyCouponSchema),
+  (c) => cart.applyCoupon(c)
+);
+carts.delete("/coupon", protect, (c) => cart.removeCoupon(c));
 
 // Anon Carts
 carts.get("/anon", anonProtect, (c) => cart.getAnonCart(c));

@@ -1,6 +1,7 @@
 import { catalogTags } from "../constants/catalogCache";
 import { logger } from "../lib/logger";
 import {
+  bumpNextTagVersions,
   invalidateBrands,
   invalidateCategories,
   invalidateProducts,
@@ -12,7 +13,7 @@ const uniqueSlugs = (slugs: string[] = []) => [
 ];
 
 /**
- * Redis invalidate first (awaited), then fire-and-forget storefront revalidate.
+ * Redis invalidate + tag-version bump (awaited), then fire-and-forget storefront revalidate.
  * Never throws — catalog writes must succeed even if purge fails.
  */
 async function purge(opts: {
@@ -23,6 +24,7 @@ async function purge(opts: {
 }): Promise<void> {
   try {
     await opts.invalidate();
+    await bumpNextTagVersions(opts.tags);
     revalidateStorefront({ tags: opts.tags, paths: opts.paths });
   } catch (err) {
     logger.error({ err, label: opts.label }, "catalog_purge_failed");

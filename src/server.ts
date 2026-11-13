@@ -10,6 +10,7 @@ import {
   addressRoutes,
   badgesRoutes,
   brandRoutes,
+  couponRoutes,
   cartRoutes,
   categoryRoutes,
   colorImageRoutes,
@@ -20,6 +21,7 @@ import {
   uploadRoutes,
   userRoutes,
   commentRoutes,
+  returnRequestRoutes,
   adminRoutes,
   homepageRoutes,
   siteSettingsRoutes,
@@ -78,11 +80,13 @@ app.route("/product", productRoutes);
 app.route("/order", orderRoutes);
 app.route("/upload", uploadRoutes);
 app.route("/badge", badgesRoutes);
+app.route("/coupon", couponRoutes);
 app.route("/cart", cartRoutes);
 app.route("/deliveryCost", deliveryCostRoutes);
 app.route("/payment", paymentRoutes);
 app.route("/colorImage", colorImageRoutes);
 app.route("/comment", commentRoutes);
+app.route("/return-request", returnRequestRoutes);
 app.route("/admin", adminRoutes);
 app.route("/homepage", homepageRoutes);
 app.route("/site-settings", siteSettingsRoutes);

@@ -64,6 +64,41 @@
       "when": 1773180000000,
       "tag": "0008_order_submit_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1773390000000,
+      "tag": "0009_comment_ratings",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1773400000000,
+      "tag": "0010_low_stock_notified",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1773410000000,
+      "tag": "0011_coupons",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1773420000000,
+      "tag": "0012_return_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1773430000000,
+      "tag": "0013_pending_phone",
+      "breakpoints": true
     }
   ]
 }

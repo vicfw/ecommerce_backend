@@ -4,7 +4,11 @@ import { db } from "../db";
 import { siteSettingsTable } from "../db/schema/siteSettings";
 import { CATALOG_TTL_SECONDS, catalogTags } from "../constants/catalogCache";
 import { withRedis } from "../lib/redis";
-import { cacheGetOrSet, cacheSet } from "../utils/catalogCache";
+import {
+  bumpNextTagVersions,
+  cacheGetOrSet,
+  cacheSet,
+} from "../utils/catalogCache";
 import { revalidateStorefront } from "../utils/revalidateStorefront";
 
 const SITE_SETTINGS_CACHE_KEY = "site-settings:content";
@@ -102,6 +106,7 @@ export const updateSiteSettings = async (c: Context) => {
 
   await cacheSet(SITE_SETTINGS_CACHE_KEY, payload, CATALOG_TTL_SECONDS);
 
+  await bumpNextTagVersions([catalogTags.siteSettings]);
   revalidateStorefront({
     tags: [catalogTags.siteSettings],
   });

@@ -19,6 +19,13 @@ import {
   type DbOrTrx,
   type ProductStock,
 } from "../utils/inventory";
+import {
+  computeCouponAmount,
+  couponRejectReason,
+  normalizeCouponCode,
+  syncCartCoupon,
+} from "../utils/coupon";
+import { couponsTable } from "../db/schema/coupons";
 
 const cartProductQuantity = async (
   trx: DbOrTrx,
@@ -262,6 +269,7 @@ export const createCart = async (c: Context) => {
         .where(eq(cartsTable.id, cart.id))
         .returning();
 
+      await syncCartCoupon(trx, cart.id);
       return await cartGetter(trx, user.id);
     }
   });
@@ -520,20 +528,29 @@ export const deleteCartItem = async (c: Context) => {
       }
 
       const { products } = cartItem;
-      const discountPrice = products.price * (products.discount || 0 / 100);
-      const price = cart.price - cartItem.cart_items.itemPrice;
+      const qty = cartItem.cart_items.quantity;
+      const unitAfterDiscount = calculatePriceAfterDiscount(
+        products.price,
+        products.discount || 0
+      );
+      const unitProfit = calculateProfit(
+        products.price,
+        products.discount || 0
+      );
 
       await trx
         .update(cartsTable)
         .set({
-          price,
-          profitFromDiscount: cart.profitFromDiscount || 0 - discountPrice,
-          totalDiscountPercentage:
-            cart.totalDiscountPercentage || -(products.discount || 0),
+          price: cart.price - cartItem.cart_items.itemPrice,
+          profitFromDiscount:
+            (cart.profitFromDiscount || 0) - unitProfit * qty,
+          totalDiscountPercentage: cart.totalDiscountPercentage || 0,
           discountPrice:
-            (cart.discountPrice || 0) - (products.price - discountPrice),
+            (cart.discountPrice || 0) - unitAfterDiscount * qty,
         })
         .where(eq(cartsTable.userId, user.id));
+
+      await syncCartCoupon(trx, cart.id);
     }
 
     await trx.delete(cartItemsTable).where(eq(cartItemsTable.id, +id));
@@ -542,6 +559,87 @@ export const deleteCartItem = async (c: Context) => {
       success: true,
       message: "cartItem deleted successfully",
     });
+  });
+};
+
+export const applyCoupon = async (c: Context) => {
+  const user = c.get("user");
+  const { code: rawCode } = await c.req.json();
+  const code = normalizeCouponCode(String(rawCode ?? ""));
+
+  const cart = await db.transaction(async (trx) => {
+    const [existing] = await trx
+      .select()
+      .from(cartsTable)
+      .where(eq(cartsTable.userId, user.id));
+
+    if (!existing) {
+      throw new HTTPException(400, { message: "Cart is empty" });
+    }
+
+    const [coupon] = await trx
+      .select()
+      .from(couponsTable)
+      .where(eq(couponsTable.code, code));
+
+    const reason = couponRejectReason(coupon, existing.discountPrice || 0);
+    if (reason || !coupon) {
+      throw new HTTPException(400, { message: reason || "کد تخفیف معتبر نیست" });
+    }
+
+    const couponAmount = computeCouponAmount(
+      coupon,
+      existing.discountPrice || 0
+    );
+
+    await trx
+      .update(cartsTable)
+      .set({
+        couponCode: coupon.code,
+        couponAmount,
+        updatedAt: new Date(),
+      })
+      .where(eq(cartsTable.id, existing.id));
+
+    return await cartGetter(trx, user.id);
+  });
+
+  return c.json({
+    success: true,
+    data: cart,
+    message: "Coupon applied successfully",
+  });
+};
+
+export const removeCoupon = async (c: Context) => {
+  const user = c.get("user");
+
+  const cart = await db.transaction(async (trx) => {
+    const [existing] = await trx
+      .select()
+      .from(cartsTable)
+      .where(eq(cartsTable.userId, user.id));
+
+    if (!existing) {
+      throw new HTTPException(400, { message: "Cart is empty" });
+    }
+
+    await trx
+      .update(cartsTable)
+      .set({
+        couponCode: null,
+        couponAmount: 0,
+        updatedAt: new Date(),
+      })
+      .where(eq(cartsTable.id, existing.id));
+
+    return await cartGetter(trx, user.id);
+  });
+
+  return c.json({
+    success: true,
+    data: cart,
+    message: "Coupon removed successfully",
   });
 };
 

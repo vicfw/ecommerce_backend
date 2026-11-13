@@ -24,6 +24,21 @@ users.get("/me", protect, (c) => user.getMe(c));
 // Update User Profile
 users.patch("/", protect, (c) => user.updateUser(c));
 
+// Change phone number (OTP to new number)
+users.post(
+  "/change-phone/request",
+  protect,
+  zValidator("json", validation.changePhoneRequestSchema),
+  (c) => user.requestChangePhone(c)
+);
+
+users.post(
+  "/change-phone/verify",
+  protect,
+  zValidator("json", validation.changePhoneVerifySchema),
+  (c) => user.verifyChangePhone(c)
+);
+
 // Update User Role
 users.patch("/role", protect, isAdmin, (c) => user.updateUserRole(c));
 

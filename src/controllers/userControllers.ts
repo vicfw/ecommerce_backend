@@ -11,6 +11,10 @@ import { verifyUserOtp } from "../utils/verifyUserOtp";
 import { dateAddition } from "../utils/dateAddition";
 import { generateSMSCode } from "../utils/genSMSCode";
 import { refreshUserOtp } from "../utils/refreshUserOtp";
+import {
+  requestChangePhoneOtp,
+  verifyChangePhoneOtp,
+} from "../utils/changePhone";
 import { paginationBuilder } from "../utils/builder/builderFunc";
 import { blacklistToken, getBearerToken } from "../utils/jwtBlacklist";
 
@@ -248,5 +252,40 @@ export const getMe = async (c: Context) => {
     success: true,
     data: sanitizeUser(user),
     message: "User found successfully",
+  });
+};
+
+export const requestChangePhone = async (c: Context) => {
+  const user = c.get("user");
+  const { phoneNumber } = await c.req.json();
+
+  const code = await requestChangePhoneOtp(
+    user.id,
+    user.phoneNumber,
+    phoneNumber
+  );
+
+  return c.json({
+    success: true,
+    message: "Change phone OTP sent",
+    ...(process.env.NODE_ENV === "production" ? {} : { code }),
+  });
+};
+
+export const verifyChangePhone = async (c: Context) => {
+  const user = c.get("user");
+  const { phoneNumber, code } = await c.req.json();
+
+  const updatedUser = await verifyChangePhoneOtp(
+    user.id,
+    user.phoneNumber,
+    phoneNumber,
+    code
+  );
+
+  return c.json({
+    success: true,
+    data: sanitizeUser(updatedUser),
+    message: "Phone number updated successfully",
   });
 };

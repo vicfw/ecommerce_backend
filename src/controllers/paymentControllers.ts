@@ -4,6 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { getLogger } from "hono-pino";
 import { db } from "../db";
 import { cartsTable } from "../db/schema/carts";
+import { incrementCouponUsedCount } from "../utils/coupon";
 import { ordersTable } from "../db/schema/orders";
 import { notifyOrderPayment } from "../sms";
 import {
@@ -12,9 +13,9 @@ import {
   PAYMENT_INIT_STALE_MS,
 } from "../utils/createPendingOrder";
 import {
+  afterInventoryCommit,
   deductReserved,
   expireStaleReservations,
-  purgeCatalogForProductIds,
   quantitiesForOrder,
   releaseReservation,
   releaseUnpaidOrder,
@@ -473,6 +474,8 @@ export const verifyPayment = async (c: Context) => {
           });
         }
 
+        await incrementCouponUsedCount(trx, updatedOrder.couponCode);
+
         return {
           ok: true as const,
           message: "Payment was successful",
@@ -503,6 +506,8 @@ export const verifyPayment = async (c: Context) => {
         });
       }
 
+      await incrementCouponUsedCount(trx, updatedLegacyOrder.couponCode);
+
       return {
         ok: true as const,
         message: "Payment was successful",
@@ -510,7 +515,7 @@ export const verifyPayment = async (c: Context) => {
       };
     });
 
-    await purgeCatalogForProductIds(verifyResult.productIds);
+    await afterInventoryCommit(verifyResult.productIds);
 
     if (verifyResult.ok) {
       log.info(

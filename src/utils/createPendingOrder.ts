@@ -8,14 +8,15 @@ import { cartGetter } from "../controllers/cartControllers";
 import { isUniqueViolation } from "./isUniqueViolation";
 import { lockUserRow } from "./lockUser";
 import {
+  afterInventoryCommit,
   cancelReservedOrder,
   groupQuantitiesByProductId,
-  purgeCatalogForProductIds,
   quantitiesForOrder,
   reservationExpiryDate,
   reserve,
   type DbOrTrx,
 } from "./inventory";
+import { syncCartCoupon } from "./coupon";
 
 type PendingOrder = typeof ordersTable.$inferSelect;
 type PendingOutcome =
@@ -28,7 +29,10 @@ export const PAYMENT_INIT_STALE_MS = 30_000;
 export const orderPayableAmount = (order: {
   totalAmount: number | null;
   deliveryAmount: number | null;
-}) => (Number(order.totalAmount) || 0) + (Number(order.deliveryAmount) || 0);
+  couponAmount?: number | null;
+}) =>
+  Math.max(0, (Number(order.totalAmount) || 0) - (Number(order.couponAmount) || 0)) +
+  (Number(order.deliveryAmount) || 0);
 
 export const isPaymentInFlight = (
   order: {
@@ -47,6 +51,8 @@ export const isPaymentInFlight = (
 const moneyFromCart = (cart: CartSnapshot) => ({
   totalAmount: cart.discountPrice || 0,
   profitFromDiscount: cart.profitFromDiscount,
+  couponCode: cart.couponCode ?? null,
+  couponAmount: cart.couponAmount || 0,
   deliveryAmount: cart.deliveryCost?.cost || 0,
 });
 
@@ -167,7 +173,11 @@ export const createPendingOrderFromCart = async (
     const outcome = await db.transaction(async (trx): Promise<PendingOutcome> => {
       await lockUserRow(trx, userId);
 
-      const cart = await cartGetter(trx, userId);
+      let cart = await cartGetter(trx, userId);
+      if (cart) {
+        await syncCartCoupon(trx, cart.id);
+        cart = await cartGetter(trx, userId);
+      }
       const pending = await loadPendingReservedOrder(trx, userId);
       const cartItems = cart?.cartItems ?? [];
       const cartEmpty = cartItems.length === 0;
@@ -248,7 +258,7 @@ export const createPendingOrderFromCart = async (
       return { kind: "order", order, touchedProductIds };
     });
 
-    await purgeCatalogForProductIds(outcome.touchedProductIds);
+    await afterInventoryCommit(outcome.touchedProductIds);
     return unwrapOutcome(outcome);
   } catch (error) {
     if (error instanceof HTTPException || !isUniqueViolation(error)) {

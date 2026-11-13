@@ -6,6 +6,7 @@ import * as addressSchema from "./schema/addresses";
 import * as productsSchema from "./schema/products";
 import * as badgesSchema from "./schema/badges";
 import * as badgesToProductsSchema from "./schema/badgesToProducts";
+import * as couponsSchema from "./schema/coupons";
 import * as cartSchema from "./schema/carts";
 import * as cartItemsSchema from "./schema/cartItems";
 import * as anonCartSchema from "./schema/anonCarts";
@@ -16,6 +17,7 @@ import * as categoriesSchema from "./schema/categories";
 import * as brandsSchema from "./schema/brands";
 import * as colorImagesSchema from "./schema/colorImage";
 import * as commentsSchema from "./schema/comments";
+import * as returnRequestsSchema from "./schema/returnRequests";
 import * as homepageSchema from "./schema/homepage";
 import * as siteSettingsSchema from "./schema/siteSettings";
 
@@ -31,6 +33,7 @@ export const db = drizzle({
     ...productsSchema,
     ...badgesSchema,
     ...badgesToProductsSchema,
+    ...couponsSchema,
     ...cartSchema,
     ...anonCartSchema,
     ...cartItemsSchema,
@@ -41,6 +44,7 @@ export const db = drizzle({
     ...brandsSchema,
     ...colorImagesSchema,
     ...commentsSchema,
+    ...returnRequestsSchema,
     ...homepageSchema,
     ...siteSettingsSchema,
   },

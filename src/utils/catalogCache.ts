@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import {
   CATALOG_TTL_SECONDS,
   CATALOG_VERSION_KEYS,
+  nextTagVersionKey,
 } from "../constants/catalogCache";
 import { withRedis } from "../lib/redis";
 
@@ -114,6 +115,21 @@ const bumpVersion = async (versionKey: string): Promise<void> => {
     return true;
   });
 };
+
+/** Bump storefront ISR tag versions so Next cache-handler misses stale entries. */
+export async function bumpNextTagVersions(tags: string[]): Promise<void> {
+  const unique = [...new Set(tags.filter(Boolean))];
+  if (unique.length === 0) return;
+
+  await withRedis(async (client) => {
+    const pipeline = client.pipeline();
+    for (const tag of unique) {
+      pipeline.incr(nextTagVersionKey(tag));
+    }
+    await pipeline.exec();
+    return true;
+  });
+}
 
 export async function invalidateProducts(slugs: string[] = []): Promise<void> {
   await bumpVersion(CATALOG_VERSION_KEYS.products);

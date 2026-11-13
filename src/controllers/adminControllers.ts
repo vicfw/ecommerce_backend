@@ -14,8 +14,7 @@ import { ordersTable } from "../db/schema/orders";
 import { productsTable } from "../db/schema/products";
 import { usersTable } from "../db/schema/users";
 import { availableStockSql } from "../utils/inventory";
-
-const LOW_STOCK_THRESHOLD = 5;
+import { LOW_STOCK_THRESHOLD } from "../utils/lowStockAlert";
 
 export const adminRequestOtp = async (c: Context) => {
   const { phoneNumber } = c.req.valid("json");

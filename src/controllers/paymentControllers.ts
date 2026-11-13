@@ -6,10 +6,15 @@ import { db } from "../db";
 import { cartsTable } from "../db/schema/carts";
 import { ordersTable } from "../db/schema/orders";
 import { notifyOrderPayment } from "../sms";
-import { createPendingOrderFromCart } from "../utils/createPendingOrder";
+import {
+  createPendingOrderFromCart,
+  orderPayableAmount,
+  PAYMENT_INIT_STALE_MS,
+} from "../utils/createPendingOrder";
 import {
   deductReserved,
   expireStaleReservations,
+  purgeCatalogForProductIds,
   quantitiesForOrder,
   releaseReservation,
   releaseUnpaidOrder,
@@ -48,8 +53,6 @@ const isFailedCallback = (success: unknown, status: unknown) => {
   const statusNum = Number(status);
   return FAILED_CALLBACK_STATUSES.has(statusNum);
 };
-
-const PAYMENT_INIT_STALE_MS = 30_000;
 
 const zibalSuccessPayload = (trackId: string | number) => ({
   result: 100,
@@ -190,7 +193,7 @@ export const paymentRequest = async (c: Context) => {
     throw new HTTPException(502, { message });
   };
 
-  let gatewayAccepted = false;
+  let trackIdPersisted = false;
 
   try {
     const response = await fetch(process.env.ZIBAL_REQUEST_API_URL, {
@@ -198,7 +201,7 @@ export const paymentRequest = async (c: Context) => {
       body: JSON.stringify({
         merchant: process.env.ZIBAL_MERCHANT_ID,
         callbackUrl: `${process.env.FRONTEND_URL}/payment/loader`,
-        amount: order.totalAmount,
+        amount: orderPayableAmount(order),
         orderId: order.id,
       }),
       headers: {
@@ -238,22 +241,19 @@ export const paymentRequest = async (c: Context) => {
       await failAndRelease("Payment gateway rejected the request");
     }
 
-    gatewayAccepted = true;
+    const [persisted] = await db
+      .update(ordersTable)
+      .set({
+        paymentTrackId: String(trackId),
+        updatedAt: new Date(),
+      })
+      .where(eq(ordersTable.id, order.id))
+      .returning({ id: ordersTable.id });
 
-    try {
-      await db
-        .update(ordersTable)
-        .set({
-          paymentTrackId: String(trackId),
-          updatedAt: new Date(),
-        })
-        .where(eq(ordersTable.id, order.id));
-    } catch (trackError) {
-      log.error(
-        { err: trackError, orderId: order.id, userId: user.id },
-        "payment_request_track_id_persist_failed"
-      );
+    if (!persisted) {
+      throw new Error("Failed to persist payment track id");
     }
+    trackIdPersisted = true;
 
     try {
       await db.delete(cartsTable).where(eq(cartsTable.userId, user.id));
@@ -275,7 +275,9 @@ export const paymentRequest = async (c: Context) => {
       throw error;
     }
 
-    if (!gatewayAccepted) {
+    // Client only redirects after this handler succeeds, so an unpersisted
+    // trackId is an abandoned gateway session — release the reservation.
+    if (!trackIdPersisted) {
       await releaseUnpaidOrder(order.id);
     }
     log.error({ err: error, orderId: order.id }, "payment_request_failed");
@@ -410,6 +412,7 @@ export const verifyPayment = async (c: Context) => {
         return {
           ok: false as const,
           message: `Order is already ${existingOrder.status}`,
+          productIds: [] as number[],
         };
       }
 
@@ -422,11 +425,13 @@ export const verifyPayment = async (c: Context) => {
         return {
           ok: true as const,
           message: "Payment was already processed successfully",
+          productIds: [] as number[],
         };
       }
 
       if (existingOrder.inventoryStatus === "reserved") {
         const quantities = await quantitiesForOrder(trx, orderId);
+        const productIds = [...quantities.keys()];
 
         if (
           existingOrder.reservationExpiresAt &&
@@ -446,6 +451,7 @@ export const verifyPayment = async (c: Context) => {
           return {
             ok: false as const,
             message: "Order reservation has expired",
+            productIds,
           };
         }
 
@@ -470,6 +476,7 @@ export const verifyPayment = async (c: Context) => {
         return {
           ok: true as const,
           message: "Payment was successful",
+          productIds,
         };
       }
 
@@ -477,6 +484,7 @@ export const verifyPayment = async (c: Context) => {
         return {
           ok: false as const,
           message: `Order is already ${existingOrder.status}`,
+          productIds: [] as number[],
         };
       }
 
@@ -498,8 +506,11 @@ export const verifyPayment = async (c: Context) => {
       return {
         ok: true as const,
         message: "Payment was successful",
+        productIds: [] as number[],
       };
     });
+
+    await purgeCatalogForProductIds(verifyResult.productIds);
 
     if (verifyResult.ok) {
       log.info(

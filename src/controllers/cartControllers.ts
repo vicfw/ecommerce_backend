@@ -337,11 +337,14 @@ export const createAnonCart = async (c: Context) => {
   }
 
   const cart = await db.transaction(async (trx) => {
-    const [cart] = await trx
-      .select()
-      .from(anonCartsTable)
-      .where(eq(anonCartsTable.id, +anoncartid))
-      .limit(1);
+    // No anonCartId header on first add — skip lookup (+undefined === NaN breaks PG).
+    const [cart] = anoncartid
+      ? await trx
+          .select()
+          .from(anonCartsTable)
+          .where(eq(anonCartsTable.id, +anoncartid))
+          .limit(1)
+      : [undefined];
 
     if (!cart) {
       await assertCartIncreaseFitsStock(trx, null, product.id);

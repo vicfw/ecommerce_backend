@@ -117,7 +117,7 @@ export const productSchema = z.object({
   prName: z.string().min(1),
   enName: z.string().min(1),
   price: z.number().nonnegative(),
-  description: z.string().min(1),
+  description: z.string(),
   quantity: z.number().int().nonnegative(),
   images: z.array(z.string()).min(1, "At least one image is required"),
   badges: z.array(z.number()).optional(),

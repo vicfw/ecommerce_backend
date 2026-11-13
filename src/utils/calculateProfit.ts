@@ -16,5 +16,3 @@ export function calculatePriceAfterDiscount(
 
   return originalPrice - profit;
 }
-
-export function calculateTotalDiscountPercentage() {}

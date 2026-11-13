@@ -18,6 +18,7 @@ import { createPendingOrderFromCart } from "../utils/createPendingOrder";
 import {
   applyInventoryForOrderStatus,
   expireStaleReservations,
+  purgeCatalogForProductIds,
 } from "../utils/inventory";
 
 export const createOrder = async (c: Context) => {
@@ -221,7 +222,7 @@ export const updateAdminOrderStatus = async (c: Context) => {
     throw new HTTPException(400, { message: "Invalid order status" });
   }
 
-  const updatedOrder = await db.transaction(async (trx) => {
+  const { updatedOrder, productIds } = await db.transaction(async (trx) => {
     const [order] = await trx
       .select()
       .from(ordersTable)
@@ -233,10 +234,10 @@ export const updateAdminOrderStatus = async (c: Context) => {
     }
 
     if (order.status === status) {
-      return order;
+      return { updatedOrder: order, productIds: [] as number[] };
     }
 
-    const inventoryStatus = await applyInventoryForOrderStatus(
+    const { inventoryStatus, productIds } = await applyInventoryForOrderStatus(
       trx,
       order,
       status
@@ -257,8 +258,10 @@ export const updateAdminOrderStatus = async (c: Context) => {
       "order_status_updated"
     );
 
-    return updated;
+    return { updatedOrder: updated, productIds };
   });
+
+  await purgeCatalogForProductIds(productIds);
 
   return c.json({
     success: true,

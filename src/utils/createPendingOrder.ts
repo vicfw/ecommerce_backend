@@ -10,6 +10,7 @@ import { lockUserRow } from "./lockUser";
 import {
   cancelReservedOrder,
   groupQuantitiesByProductId,
+  purgeCatalogForProductIds,
   quantitiesForOrder,
   reservationExpiryDate,
   reserve,
@@ -18,8 +19,36 @@ import {
 
 type PendingOrder = typeof ordersTable.$inferSelect;
 type PendingOutcome =
-  | { kind: "order"; order: PendingOrder }
-  | { kind: "error"; message: string };
+  | { kind: "order"; order: PendingOrder; touchedProductIds: number[] }
+  | { kind: "error"; message: string; touchedProductIds: number[] };
+type CartSnapshot = NonNullable<Awaited<ReturnType<typeof cartGetter>>>;
+
+export const PAYMENT_INIT_STALE_MS = 30_000;
+
+export const orderPayableAmount = (order: {
+  totalAmount: number | null;
+  deliveryAmount: number | null;
+}) => (Number(order.totalAmount) || 0) + (Number(order.deliveryAmount) || 0);
+
+export const isPaymentInFlight = (
+  order: {
+    paymentTrackId: string | null;
+    paymentInitStartedAt: Date | string | null;
+  },
+  now = Date.now()
+) => {
+  if (order.paymentTrackId) return true;
+  if (!order.paymentInitStartedAt) return false;
+  const startedAt = new Date(order.paymentInitStartedAt).getTime();
+  if (Number.isNaN(startedAt)) return false;
+  return now - startedAt <= PAYMENT_INIT_STALE_MS;
+};
+
+const moneyFromCart = (cart: CartSnapshot) => ({
+  totalAmount: cart.discountPrice || 0,
+  profitFromDiscount: cart.profitFromDiscount,
+  deliveryAmount: cart.deliveryCost?.cost || 0,
+});
 
 const quantitiesMatch = (
   left: Map<number, number>,
@@ -54,10 +83,39 @@ const loadPendingReservedOrder = async (trx: DbOrTrx, userId: number) => {
   return pending ?? null;
 };
 
+const syncPendingOrderFromCart = async (
+  trx: DbOrTrx,
+  pending: PendingOrder,
+  cart: CartSnapshot
+) => {
+  const [updated] = await trx
+    .update(ordersTable)
+    .set({
+      ...moneyFromCart(cart),
+      updatedAt: new Date(),
+    })
+    .where(eq(ordersTable.id, pending.id))
+    .returning();
+
+  for (const item of cart.cartItems) {
+    await trx
+      .update(orderItemsTable)
+      .set({ price: item.itemPrice })
+      .where(
+        and(
+          eq(orderItemsTable.orderId, pending.id),
+          eq(orderItemsTable.productId, item.productId)
+        )
+      );
+  }
+
+  return updated ?? pending;
+};
+
 const insertOrderFromCart = async (
   trx: DbOrTrx,
   userId: number,
-  cart: NonNullable<Awaited<ReturnType<typeof cartGetter>>>,
+  cart: CartSnapshot,
   addressId: number
 ) => {
   const quantities = groupQuantitiesByProductId(cart.cartItems);
@@ -68,9 +126,7 @@ const insertOrderFromCart = async (
     .values({
       userId,
       addressId,
-      totalAmount: cart.discountPrice || 0,
-      profitFromDiscount: cart.profitFromDiscount,
-      deliveryAmount: cart.deliveryCost?.cost || 0,
+      ...moneyFromCart(cart),
       status: "pending",
       inventoryStatus: "reserved",
       reservationExpiresAt: reservationExpiryDate(),
@@ -115,33 +171,46 @@ export const createPendingOrderFromCart = async (
       const pending = await loadPendingReservedOrder(trx, userId);
       const cartItems = cart?.cartItems ?? [];
       const cartEmpty = cartItems.length === 0;
+      const touchedProductIds: number[] = [];
 
       if (pending) {
-        const paymentStarted = Boolean(
-          pending.paymentTrackId || pending.paymentInitStartedAt
-        );
+        const paymentInFlight = isPaymentInFlight(pending);
 
         if (cartEmpty) {
-          if (paymentStarted) {
-            return { kind: "order", order: pending };
+          if (paymentInFlight) {
+            return { kind: "order", order: pending, touchedProductIds };
           }
 
+          const pendingQuantities = await quantitiesForOrder(trx, pending.id);
+          touchedProductIds.push(...pendingQuantities.keys());
           await cancelReservedOrder(trx, pending.id);
-          return { kind: "error", message: "Cart is empty" };
+          return {
+            kind: "error",
+            message: "Cart is empty",
+            touchedProductIds,
+          };
         }
 
         const pendingQuantities = await quantitiesForOrder(trx, pending.id);
         const cartQuantities = groupQuantitiesByProductId(cartItems);
         if (
           quantitiesMatch(pendingQuantities, cartQuantities) ||
-          paymentStarted
+          paymentInFlight
         ) {
-          return { kind: "order", order: pending };
+          if (!paymentInFlight && cart) {
+            return {
+              kind: "order",
+              order: await syncPendingOrderFromCart(trx, pending, cart),
+              touchedProductIds,
+            };
+          }
+          return { kind: "order", order: pending, touchedProductIds };
         }
 
+        touchedProductIds.push(...pendingQuantities.keys());
         await cancelReservedOrder(trx, pending.id);
       } else if (cartEmpty) {
-        return { kind: "error", message: "Cart is empty" };
+        return { kind: "error", message: "Cart is empty", touchedProductIds };
       }
 
       const [defaultAddress] = await trx
@@ -155,19 +224,31 @@ export const createPendingOrderFromCart = async (
         );
 
       if (!defaultAddress) {
-        return { kind: "error", message: "Please add a default address" };
+        return {
+          kind: "error",
+          message: "Please add a default address",
+          touchedProductIds,
+        };
       }
 
       if (!cart) {
-        return { kind: "error", message: "Cart is empty" };
+        return { kind: "error", message: "Cart is empty", touchedProductIds };
       }
 
-      return {
-        kind: "order",
-        order: await insertOrderFromCart(trx, userId, cart, defaultAddress.id),
-      };
+      const order = await insertOrderFromCart(
+        trx,
+        userId,
+        cart,
+        defaultAddress.id
+      );
+      touchedProductIds.push(
+        ...groupQuantitiesByProductId(cart.cartItems).keys()
+      );
+
+      return { kind: "order", order, touchedProductIds };
     });
 
+    await purgeCatalogForProductIds(outcome.touchedProductIds);
     return unwrapOutcome(outcome);
   } catch (error) {
     if (error instanceof HTTPException || !isUniqueViolation(error)) {

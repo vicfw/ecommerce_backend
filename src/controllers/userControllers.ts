@@ -197,30 +197,6 @@ export const loginUser = async (c: Context) => {
   });
 };
 
-// export const getUser = async (c: Context) => {
-//   const id = parseInt(c.req.param("id"));
-
-//   const user = await db.query.users.findFirst({
-//     where: eq(usersTable.id, id),
-//   });
-
-//   if (!user) {
-//     c.status(400);
-//     throw new Error("Requested user not found");
-//   }
-
-//   return c.json({
-//     success: true,
-//     data: {
-//       id: user.id,
-//       name: user.name,
-//       isAdmin: user.isAdmin,
-//       // address: user.Address,
-//     },
-//     message: "User found successfully",
-//   });
-// };
-
 export const updateUser = async (c: Context) => {
   const { name, lastName } = await c.req.json();
   const user = c.get("user");

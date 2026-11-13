@@ -6,6 +6,28 @@ import { ordersTable } from "../db/schema/orders";
 import { productsTable } from "../db/schema/products";
 import type { OrderStatus } from "../constants/orderStatus";
 import { logger } from "../lib/logger";
+import { purgeAfterProductWrite } from "./purgeCatalog";
+
+/** After inventory commits: drop product slug Redis keys + bump list version. */
+export const purgeCatalogForProductIds = async (
+  productIds: Iterable<number>
+): Promise<void> => {
+  const ids = [
+    ...new Set(
+      [...productIds].filter((id) => Number.isFinite(id) && id > 0)
+    ),
+  ];
+  if (ids.length === 0) return;
+
+  const rows = await db
+    .select({ slug: productsTable.slug })
+    .from(productsTable)
+    .where(inArray(productsTable.id, ids));
+
+  await purgeAfterProductWrite({
+    slugs: rows.map((row) => row.slug).filter(Boolean),
+  });
+};
 
 export const INVENTORY_STATUSES = ["reserved", "deducted", "released"] as const;
 export type InventoryStatus = (typeof INVENTORY_STATUSES)[number];
@@ -189,7 +211,7 @@ export const applyInventoryForOrderStatus = async (
   trx: DbOrTrx,
   order: { id: number; inventoryStatus: string | null },
   newStatus: OrderStatus
-): Promise<InventoryStatus> => {
+): Promise<{ inventoryStatus: InventoryStatus; productIds: number[] }> => {
   const current = (INVENTORY_STATUSES.includes(
     order.inventoryStatus as InventoryStatus
   )
@@ -197,15 +219,16 @@ export const applyInventoryForOrderStatus = async (
     : "released") as InventoryStatus;
 
   if (current === "released") {
-    return "released";
+    return { inventoryStatus: "released", productIds: [] };
   }
 
   const quantities = await quantitiesForOrder(trx, order.id);
+  const productIds = [...quantities.keys()];
 
   if (current === "reserved") {
     if (newStatus === "cancelled" || newStatus === "returned") {
       await releaseReservation(trx, quantities);
-      return "released";
+      return { inventoryStatus: "released", productIds };
     }
 
     if (
@@ -214,18 +237,18 @@ export const applyInventoryForOrderStatus = async (
       newStatus === "delivered"
     ) {
       await deductReserved(trx, quantities);
-      return "deducted";
+      return { inventoryStatus: "deducted", productIds };
     }
 
-    return "reserved";
+    return { inventoryStatus: "reserved", productIds: [] };
   }
 
   if (newStatus === "cancelled" || newStatus === "returned") {
     await restoreSold(trx, quantities);
-    return "released";
+    return { inventoryStatus: "released", productIds };
   }
 
-  return "deducted";
+  return { inventoryStatus: "deducted", productIds: [] };
 };
 
 export const cancelReservedOrder = async (trx: DbOrTrx, orderId: number) => {
@@ -244,6 +267,7 @@ export const cancelReservedOrder = async (trx: DbOrTrx, orderId: number) => {
 };
 
 export const releaseUnpaidOrder = async (orderId: number) => {
+  const productIds: number[] = [];
   const released = await db.transaction(async (trx) => {
     const [order] = await trx
       .select({
@@ -258,15 +282,23 @@ export const releaseUnpaidOrder = async (orderId: number) => {
       return false;
     }
 
+    const quantities = await quantitiesForOrder(trx, order.id);
+    productIds.push(...quantities.keys());
     await cancelReservedOrder(trx, order.id);
     logger.warn({ orderId }, "unpaid_order_released");
     return true;
   });
 
+  if (released) {
+    await purgeCatalogForProductIds(productIds);
+  }
+
   return Boolean(released);
 };
 
 export const expireStaleReservations = async () => {
+  const productIds: number[] = [];
+
   await db.transaction(async (trx) => {
     const staleOrders = await trx
       .select({
@@ -283,6 +315,8 @@ export const expireStaleReservations = async () => {
       .for("update");
 
     for (const order of staleOrders) {
+      const quantities = await quantitiesForOrder(trx, order.id);
+      productIds.push(...quantities.keys());
       await cancelReservedOrder(trx, order.id);
     }
 
@@ -290,4 +324,6 @@ export const expireStaleReservations = async () => {
       logger.info({ count: staleOrders.length }, "stale_reservations_expired");
     }
   });
+
+  await purgeCatalogForProductIds(productIds);
 };
